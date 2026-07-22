@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: nexus
+    runtime: python
+    plan: starter            # $7/mo always-on. Use "free" to test (sleeps when idle).
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn server:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: NEXUS_DATA_DIR
+        value: /var/data
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+    disk:
+      name: nexus-data
+      mountPath: /var/data
+      sizeGB: 1

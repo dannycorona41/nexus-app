@@ -1,0 +1,3612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NEXUS — Neural Exchange Unified System</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#07080f;color:#c8cbf0;font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:#0d0f1e}
+::-webkit-scrollbar-thumb{background:#252848;border-radius:2px}
+@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.ticker-wrap{animation:ticker 55s linear infinite;display:flex;gap:32px;white-space:nowrap}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+.pulse{animation:pulse 2s ease-in-out infinite}
+.fade{animation:fadeIn .25s ease}
+button,input,textarea{font-family:'Inter',sans-serif}
+input:focus,textarea:focus{outline:none}
+@keyframes tradeFlash{0%{background:rgba(0,214,143,.35)}100%{background:transparent}}
+@keyframes tradeFlashRed{0%{background:rgba(240,71,106,.35)}100%{background:transparent}}
+@keyframes confettiFall{0%{transform:translateY(-20px) rotate(0deg);opacity:1}100%{transform:translateY(105vh) rotate(720deg);opacity:0}}
+@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideOut{from{transform:translateX(0);opacity:1}to{transform:translateX(110%);opacity:0}}
+@keyframes signalPulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 14px #4f8eff88}}
+@keyframes tpFlash{0%{box-shadow:0 0 0 0 #00d68f88}70%{box-shadow:0 0 0 16px transparent}100%{box-shadow:none}}
+.trade-flash{animation:tradeFlash .9s ease forwards}
+.trade-flash-red{animation:tradeFlashRed .9s ease forwards}
+.signal-pulse{animation:signalPulse 1.2s ease 3}
+.tp-ring{animation:tpFlash .8s ease}
+</style>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  var root = document.getElementById('root');
+  var detail = (err && err.stack) ? err.stack : (msg + ' (line ' + line + ', col ' + col + ')');
+  var srcShort = src ? src.split('/').slice(-2).join('/') : 'unknown';
+  console.error('NEXUS ERROR:', msg, '\nSource:', src, '\nLine:', line, '\nStack:', err && err.stack);
+  if (root) {
+    root.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#07080f;flex-direction:column;gap:12px;padding:32px"><div style=\'font-family:monospace;font-size:36px;color:#f0476a;font-weight:900\'>NEXUS ERROR</div><div style=\'color:#5a5f80;font-size:13px;text-align:center;max-width:600px\'>Open DevTools (Cmd+Option+I) → Console tab for the full error.</div><div style=\'background:#0d0f1e;border:1px solid #252848;border-radius:8px;padding:16px;max-width:600px;width:100%\"><div style=\'color:#f0476a;font-family:monospace;font-size:11px;word-break:break-all;white-space:pre-wrap\'>' + detail + '</div></div><div style=\'color:#4f8eff;font-size:12px;margin-top:4px\'>Hard refresh: Cmd+Shift+R</div></div>';
+  }
+};
+</script>
+</head>
+<body>
+<div id="root">
+  <div id="nexus-loading" style="display:flex;align-items:center;justify-content:center;height:100vh;background:#07080f;flex-direction:column;gap:16px">
+    <div style="font-family:monospace;font-size:56px;font-weight:900;color:#c8cbf0;letter-spacing:.12em">NEXUS</div>
+    <div style="font-family:monospace;font-size:11px;color:#4f8eff;letter-spacing:.3em;text-transform:uppercase">Neural Exchange Unified System</div>
+    <div style="width:200px;height:2px;background:#252848;border-radius:2px;overflow:hidden;margin-top:8px">
+      <div id="nexus-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#4f8eff,#a66cff);border-radius:2px;transition:width .4s ease;animation:nexusLoad 12s ease-in-out forwards"></div>
+    </div>
+    <div style="font-family:monospace;font-size:11px;color:#5a5f80">Loading intelligence systems...</div>
+  </div>
+  <style>@keyframes nexusLoad{0%{width:0%}30%{width:45%}70%{width:75%}90%{width:88%}100%{width:95%}}</style>
+</div>
+<script>
+try {
+  const {
+    useState,
+    useEffect,
+    useRef,
+    useCallback
+  } = React;
+
+  /* ── BACKEND API ─────────────────────────────────────────────── */
+  const API_BASE = '';
+  const apiFetch = async path => {
+    const r = await fetch(API_BASE + path);
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  };
+
+  /* ── SOUND ENGINE (Web Audio API) ─────────────────────────── */
+  const playTone = (freq, dur, type = 'sine', vol = 0.25) => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      g.gain.setValueAtTime(vol, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + dur);
+    } catch (e) {}
+  };
+  const SFX = {
+    signal: () => {
+      playTone(440, .12);
+      setTimeout(() => playTone(554, .18), 130);
+    },
+    buy: () => {
+      playTone(523, .15);
+      setTimeout(() => playTone(659, .25), 160);
+    },
+    tp: () => {
+      playTone(523, .12);
+      setTimeout(() => playTone(659, .12), 120);
+      setTimeout(() => playTone(784, .3), 240);
+    },
+    sl: () => {
+      playTone(330, .25, 'sawtooth', .15);
+      setTimeout(() => playTone(262, .35, 'sawtooth', .1), 220);
+    },
+    alert: () => {
+      playTone(880, .08);
+      setTimeout(() => playTone(880, .08), 120);
+    }
+  };
+
+  /* ── CONFETTI ────────────────────────────────────────────────── */
+  function Confetti({
+    active
+  }) {
+    if (!active) return null;
+    const cols = ['#00d68f', '#4f8eff', '#f5c518', '#a66cff', '#ff8c42', '#00c9b1'];
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        pointerEvents: 'none',
+        zIndex: 998,
+        overflow: 'hidden'
+      }
+    }, Array.from({
+      length: 40
+    }, (_, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        position: 'absolute',
+        left: `${(i * 7.3 + 13) % 100}%`,
+        top: '-12px',
+        width: 7 + i % 5,
+        height: 5 + i % 4,
+        background: cols[i % cols.length],
+        borderRadius: 2,
+        animation: `confettiFall ${1.4 + i % 8 * .15}s ${i * .05}s ease-in forwards`
+      }
+    })));
+  }
+
+  /* ── TOAST NOTIFICATIONS ─────────────────────────────────────── */
+  function ToastStack({
+    toasts
+  }) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: 'fixed',
+        top: 68,
+        right: 14,
+        zIndex: 999,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        maxWidth: 280
+      }
+    }, toasts.map(t => /*#__PURE__*/React.createElement("div", {
+      key: t.id,
+      className: "fade",
+      style: {
+        padding: '10px 14px',
+        borderRadius: 8,
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#fff',
+        background: t.type === 'tp' ? '#00a870' : t.type === 'sl' ? '#c43060' : t.type === 'buy' ? '#1a52cc' : t.type === 'alert' ? '#7040cc' : '#1a52cc',
+        boxShadow: '0 4px 16px rgba(0,0,0,.55)',
+        borderLeft: `3px solid ${t.type === 'tp' ? '#00d68f' : t.type === 'sl' ? '#f0476a' : t.type === 'alert' ? '#a66cff' : '#4f8eff'}`,
+        display: 'flex',
+        gap: 10,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 16
+      }
+    }, t.type === 'tp' ? '✅' : t.type === 'sl' ? '🛑' : t.type === 'buy' ? '📈' : t.type === 'alert' ? '⚡' : '📊'), /*#__PURE__*/React.createElement("span", null, t.message))));
+  }
+
+  /* ── TOKENS ─────────────────────────────────────────────── */
+  const C = {
+    bg: '#07080f',
+    sf: '#0d0f1e',
+    sf2: '#141629',
+    seam: '#252848',
+    ink: '#c8cbf0',
+    dust: '#5a5f80',
+    blue: '#4f8eff',
+    green: '#00d68f',
+    red: '#f0476a',
+    purple: '#a66cff',
+    gold: '#f5c518',
+    orange: '#ff8c42',
+    teal: '#00c9b1'
+  };
+
+  /* ── CG ID MAP ───────────────────────────────────────────── */
+  const CG = {
+    BTC: 'bitcoin',
+    ETH: 'ethereum',
+    SOL: 'solana',
+    XRP: 'ripple',
+    ADA: 'cardano',
+    AVAX: 'avalanche-2',
+    LINK: 'chainlink',
+    DOT: 'polkadot',
+    MATIC: 'matic-network',
+    ARB: 'arbitrum',
+    OP: 'optimism',
+    UNI: 'uniswap',
+    AAVE: 'aave',
+    RENDER: 'render-token',
+    FET: 'fetch-ai',
+    TAO: 'bittensor',
+    MKR: 'maker',
+    LDO: 'lido-dao',
+    GMX: 'gmx',
+    NEAR: 'near',
+    APT: 'aptos',
+    SUI: 'sui',
+    TON: 'the-open-network',
+    HBAR: 'hedera-hashgraph',
+    ALGO: 'algorand'
+  };
+
+  /* ── SEED DATA ───────────────────────────────────────────── */
+  const SEED = [{
+    s: 'BTC',
+    n: 'Bitcoin',
+    cat: 'L1 Foundation',
+    p: 108420,
+    ch1: 0.6,
+    ch: 2.14,
+    score: 88,
+    action: 'CONVICTION'
+  }, {
+    s: 'ETH',
+    n: 'Ethereum',
+    cat: 'L1 Smart Contract',
+    p: 3248,
+    ch1: 0.6,
+    ch: -0.82,
+    score: 76,
+    action: 'POSITION'
+  }, {
+    s: 'SOL',
+    n: 'Solana',
+    cat: 'L1 Smart Contract',
+    p: 186.4,
+    ch1: 0.9,
+    ch: 4.21,
+    score: 82,
+    action: 'CONVICTION'
+  }, {
+    s: 'XRP',
+    n: 'XRP',
+    cat: 'Payments',
+    p: 2.34,
+    ch1: 0.3,
+    ch: 0.54,
+    score: 71,
+    action: 'POSITION'
+  }, {
+    s: 'ADA',
+    n: 'Cardano',
+    cat: 'L1 Smart Contract',
+    p: 0.94,
+    ch1: 0.5,
+    ch: -1.23,
+    score: 58,
+    action: 'WATCH'
+  }, {
+    s: 'AVAX',
+    n: 'Avalanche',
+    cat: 'L1 Smart Contract',
+    p: 42.10,
+    ch1: 1.1,
+    ch: 3.18,
+    score: 74,
+    action: 'POSITION'
+  }, {
+    s: 'LINK',
+    n: 'Chainlink',
+    cat: 'Infrastructure',
+    p: 18.92,
+    ch1: 0.8,
+    ch: 1.67,
+    score: 79,
+    action: 'POSITION'
+  }, {
+    s: 'DOT',
+    n: 'Polkadot',
+    cat: 'Infrastructure',
+    p: 8.42,
+    ch1: -0.2,
+    ch: -0.33,
+    score: 52,
+    action: 'WATCH'
+  }, {
+    s: 'MATIC',
+    n: 'Polygon',
+    cat: 'L2 Scaling',
+    p: 0.58,
+    ch1: 1.2,
+    ch: 2.91,
+    score: 63,
+    action: 'RESEARCH'
+  }, {
+    s: 'ARB',
+    n: 'Arbitrum',
+    cat: 'L2 Scaling',
+    p: 0.82,
+    ch1: 0.7,
+    ch: 5.12,
+    score: 71,
+    action: 'POSITION'
+  }, {
+    s: 'OP',
+    n: 'Optimism',
+    cat: 'L2 Scaling',
+    p: 1.42,
+    ch1: 1.4,
+    ch: 3.88,
+    score: 68,
+    action: 'RESEARCH'
+  }, {
+    s: 'UNI',
+    n: 'Uniswap',
+    cat: 'DeFi',
+    p: 11.24,
+    ch1: 0.6,
+    ch: 1.44,
+    score: 72,
+    action: 'POSITION'
+  }, {
+    s: 'AAVE',
+    n: 'Aave',
+    cat: 'DeFi',
+    p: 214.8,
+    ch1: 0.9,
+    ch: 2.10,
+    score: 75,
+    action: 'POSITION'
+  }, {
+    s: 'RENDER',
+    n: 'Render',
+    cat: 'AI/Compute',
+    p: 8.20,
+    ch1: 2.1,
+    ch: 6.42,
+    score: 80,
+    action: 'CONVICTION'
+  }, {
+    s: 'FET',
+    n: 'Fetch.ai',
+    cat: 'AI/Compute',
+    p: 2.14,
+    ch1: 1.8,
+    ch: 4.88,
+    score: 77,
+    action: 'POSITION'
+  }, {
+    s: 'TAO',
+    n: 'Bittensor',
+    cat: 'AI/Compute',
+    p: 420,
+    ch1: 3.2,
+    ch: 7.21,
+    score: 83,
+    action: 'CONVICTION'
+  }, {
+    s: 'MKR',
+    n: 'Maker',
+    cat: 'DeFi',
+    p: 1840,
+    ch1: 0.4,
+    ch: 1.02,
+    score: 70,
+    action: 'POSITION'
+  }, {
+    s: 'LDO',
+    n: 'Lido DAO',
+    cat: 'DeFi',
+    p: 1.84,
+    ch1: -0.3,
+    ch: -0.44,
+    score: 62,
+    action: 'RESEARCH'
+  }, {
+    s: 'NEAR',
+    n: 'NEAR Protocol',
+    cat: 'L1 Smart Contract',
+    p: 6.12,
+    ch1: 1.1,
+    ch: 4.2,
+    score: 69,
+    action: 'RESEARCH'
+  }, {
+    s: 'APT',
+    n: 'Aptos',
+    cat: 'L1 Smart Contract',
+    p: 9.8,
+    ch1: 0.7,
+    ch: 2.8,
+    score: 65,
+    action: 'RESEARCH'
+  }];
+  const TRENDING_SEED = [{
+    s: 'PEPE',
+    n: 'Pepe',
+    r: 1,
+    ch: 15.2
+  }, {
+    s: 'WIF',
+    n: 'dogwifhat',
+    r: 2,
+    ch: 8.4
+  }, {
+    s: 'BOME',
+    n: 'Book of Meme',
+    r: 3,
+    ch: 11.8
+  }, {
+    s: 'BRETT',
+    n: 'Brett',
+    r: 4,
+    ch: 6.2
+  }, {
+    s: 'POPCAT',
+    n: 'Popcat',
+    r: 5,
+    ch: 9.1
+  }, {
+    s: 'MEW',
+    n: 'cat in dogs',
+    r: 6,
+    ch: 4.8
+  }, {
+    s: 'FLOKI',
+    n: 'Floki Inu',
+    r: 7,
+    ch: -2.1
+  }];
+
+  /* ── UTILS ───────────────────────────────────────────────── */
+  const fp = p => p >= 1000 ? '$' + p.toLocaleString('en-US', {
+    maximumFractionDigits: 0
+  }) : p >= 1 ? '$' + p.toFixed(2) : '$' + p.toFixed(4);
+  const sc = s => s >= 85 ? C.purple : s >= 75 ? C.green : s >= 60 ? C.blue : s >= 45 ? C.orange : C.dust;
+  const ac = a => ({
+    CONVICTION: C.purple,
+    POSITION: C.blue,
+    RESEARCH: C.orange,
+    WATCH: C.dust,
+    SKIP: C.dust
+  })[a] || C.dust;
+  const ls = {
+    g: (k, fb) => {
+      try {
+        const v = localStorage.getItem('nx_' + k);
+        return v ? JSON.parse(v) : fb;
+      } catch {
+        return fb;
+      }
+    },
+    s: (k, v) => {
+      try {
+        localStorage.setItem('nx_' + k, JSON.stringify(v));
+      } catch {}
+    }
+  };
+
+  /* ── SHARED UI ───────────────────────────────────────────── */
+  const Card = ({
+    ch,
+    style: s = {}
+  }) => /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.sf,
+      border: `1px solid ${C.seam}`,
+      borderRadius: 8,
+      padding: 16,
+      ...s
+    }
+  }, ch);
+  const Badge = ({
+    label,
+    color,
+    s = {}
+  }) => /*#__PURE__*/React.createElement("span", {
+    style: {
+      padding: '2px 8px',
+      borderRadius: 4,
+      fontSize: 11,
+      fontWeight: 700,
+      background: `${color || C.dust}22`,
+      color: color || C.dust,
+      fontFamily: 'monospace',
+      letterSpacing: '.04em',
+      ...s
+    }
+  }, label);
+  const ST = ({
+    ch
+  }) => /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: C.dust,
+      letterSpacing: '.1em',
+      textTransform: 'uppercase',
+      marginBottom: 12
+    }
+  }, ch);
+  const HR = () => /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: C.seam,
+      margin: '12px 0'
+    }
+  });
+  const Spin = () => /*#__PURE__*/React.createElement("span", {
+    className: "spin",
+    style: {
+      color: C.blue
+    }
+  }, "⟳");
+  const DemoTag = () => /*#__PURE__*/React.createElement("span", {
+    title: "Illustrative sample data — not pulled from your live trading engine or a real data feed",
+    style: {
+      padding: '2px 7px',
+      borderRadius: 4,
+      fontSize: 9,
+      fontWeight: 700,
+      background: `${C.dust}22`,
+      color: C.dust,
+      fontFamily: 'monospace',
+      letterSpacing: '.05em'
+    }
+  }, "SAMPLE DATA");
+  function MiniChart({
+    data,
+    color = C.green,
+    h = 60
+  }) {
+    if (!data || !data.length) return null;
+    const vals = data.map(d => d.e ?? d.value);
+    const mn = Math.min(...vals),
+      mx = Math.max(...vals);
+    const W = 280,
+      pad = 4,
+      x = i => i / (vals.length - 1) * (W - pad * 2) + pad,
+      y = v => h - pad - (v - mn) / (mx - mn || 1) * (h - pad * 2);
+    const pts = vals.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+    const apts = `M${x(0)},${h} ${vals.map((v, i) => `L${x(i)},${y(v)}`).join(' ')} L${x(vals.length - 1)},${h} Z`;
+    return /*#__PURE__*/React.createElement("svg", {
+      viewBox: `0 0 ${W} ${h}`,
+      style: {
+        width: '100%',
+        height: h
+      },
+      preserveAspectRatio: "none"
+    }, /*#__PURE__*/React.createElement("defs", null, /*#__PURE__*/React.createElement("linearGradient", {
+      id: "mg",
+      x1: "0",
+      y1: "0",
+      x2: "0",
+      y2: "1"
+    }, /*#__PURE__*/React.createElement("stop", {
+      offset: "0%",
+      stopColor: color,
+      stopOpacity: ".3"
+    }), /*#__PURE__*/React.createElement("stop", {
+      offset: "100%",
+      stopColor: color,
+      stopOpacity: "0"
+    }))), /*#__PURE__*/React.createElement("path", {
+      d: apts,
+      fill: "url(#mg)"
+    }), /*#__PURE__*/React.createElement("polyline", {
+      points: pts,
+      fill: "none",
+      stroke: color,
+      strokeWidth: "1.5"
+    }));
+  }
+
+  /* ── COIN CHART MODAL ────────────────────────────────────── */
+  function CoinModal({
+    coin,
+    onClose
+  }) {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    useEffect(() => {
+      const cgId = CG[coin.s];
+      if (!cgId) {
+        setLoading(false);
+        return;
+      }
+      fetch(`/api/chart/${cgId}?days=30`).then(r => r.json()).then(d => {
+        if (d && !d.error && d.prices) setData(d);
+        setLoading(false);
+      }).catch(() => setLoading(false));
+    }, [coin.s]);
+    const prices = data ? data.prices.map(p => p[1]) : [];
+    const vols = data ? data.total_volumes.map(v => v[1]) : [];
+    const high = prices.length ? Math.max(...prices) : 0;
+    const low = prices.length ? Math.min(...prices) : 0;
+    const range = high - low;
+    const fibs = [{
+      r: 1.0,
+      l: 'High',
+      c: C.dust
+    }, {
+      r: 0.786,
+      l: '0.786',
+      c: C.dust
+    }, {
+      r: 0.702,
+      l: '0.702 OTE',
+      c: C.gold
+    }, {
+      r: 0.618,
+      l: '0.618',
+      c: C.dust
+    }, {
+      r: 0.5,
+      l: '0.5',
+      c: C.dust
+    }, {
+      r: 0.382,
+      l: '0.382',
+      c: C.dust
+    }, {
+      r: 0.0,
+      l: 'Low',
+      c: C.dust
+    }];
+    const W = 560,
+      H = 220,
+      PL = 8,
+      PR = 70,
+      PT = 10,
+      PB = 8;
+    const cw = W - PL - PR,
+      ch_h = H - PT - PB;
+    const px = i => i / Math.max(prices.length - 1, 1) * cw + PL;
+    const py = v => H - PB - (v - low) / (range || 1) * ch_h;
+    const pts = prices.map((v, i) => `${px(i)},${py(v)}`).join(' ');
+    const maxVol = vols.length ? Math.max(...vols) : 1;
+    const VH = 40;
+    const curP = prices[prices.length - 1] || coin.p;
+    const oteLevel = high - range * 0.702;
+    const inOTE = curP >= high - range * 0.786 && curP <= high - range * 0.618;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "fade",
+      style: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: '#000a',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16
+      },
+      onClick: onClose
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 12,
+        padding: 20,
+        maxWidth: 640,
+        width: '100%',
+        maxHeight: '90vh',
+        overflowY: 'auto'
+      },
+      onClick: e => e.stopPropagation()
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 12,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 18,
+        fontWeight: 700,
+        color: C.ink
+      }
+    }, coin.s), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.dust
+      }
+    }, coin.n)), /*#__PURE__*/React.createElement(Badge, {
+      label: coin.action,
+      color: ac(coin.action)
+    }), inOTE && /*#__PURE__*/React.createElement(Badge, {
+      label: "IN OTE ZONE",
+      color: C.gold
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 16,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'right'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 18,
+        fontWeight: 700,
+        color: C.ink
+      }
+    }, fp(curP)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: coin.ch >= 0 ? C.green : C.red
+      }
+    }, coin.ch >= 0 ? '+' : '', coin.ch.toFixed(2), "% 24h")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 22,
+        fontWeight: 700,
+        color: sc(coin.score)
+      }
+    }, coin.score), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        color: C.dust
+      }
+    }, "NEXUS")), /*#__PURE__*/React.createElement("button", {
+      onClick: onClose,
+      style: {
+        background: 'transparent',
+        border: `1px solid ${C.seam}`,
+        color: C.dust,
+        borderRadius: 6,
+        padding: '4px 10px',
+        fontSize: 16,
+        cursor: 'pointer'
+      }
+    }, "✕"))), loading && /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center',
+        padding: 40,
+        color: C.dust
+      }
+    }, /*#__PURE__*/React.createElement(Spin, null), " Loading 30-day chart..."), !loading && prices.length === 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center',
+        padding: 40,
+        color: C.dust
+      }
+    }, "Chart unavailable for this asset"), !loading && prices.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 4,
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: 10,
+        color: C.dust
+      }
+    }, /*#__PURE__*/React.createElement("span", null, "30-day price · Fibonacci levels"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.gold
+      }
+    }, "⬡ OTE 0.702")), /*#__PURE__*/React.createElement("svg", {
+      viewBox: `0 0 ${W} ${H + VH + 10}`,
+      style: {
+        width: '100%',
+        borderRadius: 6,
+        background: C.sf2
+      }
+    }, /*#__PURE__*/React.createElement("defs", null, /*#__PURE__*/React.createElement("linearGradient", {
+      id: "cg2",
+      x1: "0",
+      y1: "0",
+      x2: "0",
+      y2: "1"
+    }, /*#__PURE__*/React.createElement("stop", {
+      offset: "0%",
+      stopColor: coin.ch >= 0 ? C.green : C.red,
+      stopOpacity: ".25"
+    }), /*#__PURE__*/React.createElement("stop", {
+      offset: "100%",
+      stopColor: coin.ch >= 0 ? C.green : C.red,
+      stopOpacity: "0"
+    }))), fibs.map(f => {
+      const fy = py(low + range * (1 - f.r));
+      const isOTE = f.r === 0.702;
+      return /*#__PURE__*/React.createElement("g", {
+        key: f.r
+      }, /*#__PURE__*/React.createElement("line", {
+        x1: PL,
+        y1: fy,
+        x2: W - PR,
+        y2: fy,
+        stroke: isOTE ? C.gold : C.seam,
+        strokeWidth: isOTE ? 1.5 : 0.5,
+        strokeDasharray: isOTE ? "0" : "3"
+      }), /*#__PURE__*/React.createElement("text", {
+        x: W - PR + 4,
+        y: fy + 3,
+        fill: isOTE ? C.gold : C.dust,
+        fontSize: "8.5",
+        fontFamily: "monospace"
+      }, f.l));
+    }), /*#__PURE__*/React.createElement("path", {
+      d: `M${px(0)},${H - PB} ${prices.map((v, i) => `L${px(i)},${py(v)}`).join(' ')} L${px(prices.length - 1)},${H - PB} Z`,
+      fill: "url(#cg2)"
+    }), /*#__PURE__*/React.createElement("polyline", {
+      points: pts,
+      fill: "none",
+      stroke: coin.ch >= 0 ? C.green : C.red,
+      strokeWidth: "1.5"
+    }), vols.map((v, i) => {
+      const bh = v / maxVol * VH * 0.8;
+      return /*#__PURE__*/React.createElement("rect", {
+        key: i,
+        x: px(i) - 3,
+        y: H + 10 + (VH - bh),
+        width: 6,
+        height: bh,
+        fill: C.blue,
+        opacity: ".4"
+      });
+    }), /*#__PURE__*/React.createElement("text", {
+      x: PL,
+      y: H + 8,
+      fill: C.dust,
+      fontSize: "8"
+    }, "Volume")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4,1fr)',
+        gap: 8,
+        marginTop: 12
+      }
+    }, [['30D HIGH', fp(high), C.green], ['OTE 0.702', fp(oteLevel), C.gold], ['30D LOW', fp(low), C.red], [inOTE ? 'STATUS ✓' : 'STATUS', 'IN OTE ZONE', inOTE ? C.gold : C.dust]].map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
+      key: l,
+      style: {
+        background: C.sf2,
+        borderRadius: 6,
+        padding: '8px 10px',
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        color: C.dust,
+        marginBottom: 3
+      }
+    }, l), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 11,
+        fontWeight: 700,
+        color: c
+      }
+    }, v)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12,
+        padding: '10px 14px',
+        background: `${C.gold}11`,
+        border: `1px solid ${C.gold}33`,
+        borderRadius: 6
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: C.gold,
+        fontWeight: 600,
+        marginBottom: 6
+      }
+    }, "OTE TRADE SETUP (0.702 Fibonacci)"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3,1fr)',
+        gap: 8,
+        fontSize: 11
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.dust
+      }
+    }, "Entry: "), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        color: C.blue
+      }
+    }, fp(oteLevel))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.dust
+      }
+    }, "Stop: "), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        color: C.red
+      }
+    }, fp(low + range * 0.1))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.dust
+      }
+    }, "Target: "), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        color: C.green
+      }
+    }, fp(high + range * 0.702))))))));
+  }
+
+  /* ── GEM MODAL — simplified explanation for first-timers ──── */
+  function GemModal({
+    gem,
+    onClose
+  }) {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const cgIdGuess = (gem.s || '').toLowerCase();
+    useEffect(() => {
+      setLoading(true);
+      // gem.coingecko_id now comes from the server-side /api/gems/scan endpoint;
+      // fall back to a name-lowercase guess for old cached results.
+      const id = gem.coingecko_id || (gem.n || '').toLowerCase().replace(/\s+/g, '-');
+      fetch(`/api/chart/${id}?days=14`).then(r => r.json()).then(d => {
+        if (d && !d.error && d.prices) setData(d);
+        setLoading(false);
+      }).catch(() => setLoading(false));
+    }, [gem.s]);
+    const prices = data ? data.prices.map(p => p[1]) : [];
+    const high = prices.length ? Math.max(...prices) : 0;
+    const low = prices.length ? Math.min(...prices) : 0;
+    const range = high - low || 1;
+    const W = 520,
+      H = 140,
+      PAD = 8;
+    const px = i => i / Math.max(prices.length - 1, 1) * (W - PAD * 2) + PAD;
+    const py = v => H - PAD - (v - low) / range * (H - PAD * 2);
+    const pts = prices.map((v, i) => `${px(i)},${py(v)}`).join(' ');
+    const trendUp = prices.length > 1 ? prices[prices.length - 1] >= prices[0] : true;
+    const ratioNum = typeof gem.ratio === 'number' ? gem.ratio : parseFloat(gem.ratio);
+    const momNum = typeof gem.mom === 'number' ? gem.mom : parseFloat(gem.mom);
+    const reasons = [{
+      ok: ratioNum >= 0.3,
+      title: 'People are trading it a LOT compared to its size',
+      body: `Today's trading volume is ${(ratioNum * 100).toFixed(0)}% of the coin's entire market value. When that number is high, it usually means a lot of new people are jumping in right now — which can push the price up.`
+    }, {
+      ok: momNum >= 0,
+      title: momNum >= 0 ? 'The price has been climbing' : 'The price has been falling',
+      body: momNum >= 0 ? `It's up ${Math.abs(momNum).toFixed(1)}% recently. That means buyers have had more control than sellers lately.` : `It's down ${Math.abs(momNum).toFixed(1)}% recently. That's a caution sign — sellers have had more control lately.`
+    }, {
+      ok: true,
+      title: 'Why this matters for a small coin',
+      body: `This coin has a smaller total value (${gem.mc}), so it takes less money moving in to make the price jump a lot. That's the opportunity — and also the risk: it can fall just as fast.`
+    }];
+    return /*#__PURE__*/React.createElement("div", {
+      className: "fade",
+      style: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: '#000a',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16
+      },
+      onClick: onClose
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 12,
+        padding: 20,
+        maxWidth: 560,
+        width: '100%',
+        maxHeight: '90vh',
+        overflowY: 'auto'
+      },
+      onClick: e => e.stopPropagation()
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 10,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 20,
+        fontWeight: 700,
+        color: C.ink
+      }
+    }, gem.s), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        color: C.dust
+      }
+    }, gem.n)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: C.dust,
+        marginTop: 2
+      }
+    }, "Market size: ", gem.mc)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 12,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 22,
+        fontWeight: 700,
+        color: sc(gem.score)
+      }
+    }, gem.score), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        color: C.dust
+      }
+    }, "Gem Score")), /*#__PURE__*/React.createElement("button", {
+      onClick: onClose,
+      style: {
+        background: 'transparent',
+        border: `1px solid ${C.seam}`,
+        color: C.dust,
+        borderRadius: 6,
+        padding: '4px 10px',
+        fontSize: 16,
+        cursor: 'pointer'
+      }
+    }, "✕"))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 6,
+        fontSize: 11,
+        color: C.dust
+      }
+    }, "Last 14 days"), loading && /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center',
+        padding: 30,
+        color: C.dust,
+        background: C.sf2,
+        borderRadius: 8
+      }
+    }, /*#__PURE__*/React.createElement(Spin, null), " Loading chart..."), !loading && prices.length === 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center',
+        padding: 30,
+        color: C.dust,
+        background: C.sf2,
+        borderRadius: 8,
+        fontSize: 12
+      }
+    }, "Chart not available for this coin yet — it may be too new or too small for price history."), !loading && prices.length > 0 && /*#__PURE__*/React.createElement("svg", {
+      viewBox: `0 0 ${W} ${H}`,
+      style: {
+        width: '100%',
+        height: 120,
+        background: C.sf2,
+        borderRadius: 8
+      }
+    }, /*#__PURE__*/React.createElement("defs", null, /*#__PURE__*/React.createElement("linearGradient", {
+      id: "gemGrad",
+      x1: "0",
+      y1: "0",
+      x2: "0",
+      y2: "1"
+    }, /*#__PURE__*/React.createElement("stop", {
+      offset: "0%",
+      stopColor: trendUp ? C.green : C.red,
+      stopOpacity: ".3"
+    }), /*#__PURE__*/React.createElement("stop", {
+      offset: "100%",
+      stopColor: trendUp ? C.green : C.red,
+      stopOpacity: "0"
+    }))), /*#__PURE__*/React.createElement("path", {
+      d: `M${px(0)},${H - PAD} ${prices.map((v, i) => `L${px(i)},${py(v)}`).join(' ')} L${px(prices.length - 1)},${H - PAD} Z`,
+      fill: "url(#gemGrad)"
+    }), /*#__PURE__*/React.createElement("polyline", {
+      points: pts,
+      fill: "none",
+      stroke: trendUp ? C.green : C.red,
+      strokeWidth: "2"
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 16,
+        fontSize: 11,
+        fontWeight: 700,
+        color: C.dust,
+        letterSpacing: '.08em',
+        textTransform: 'uppercase',
+        marginBottom: 10
+      }
+    }, "Why NEXUS flagged this coin"), reasons.map((r, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        display: 'flex',
+        gap: 10,
+        marginBottom: 10,
+        padding: '10px 12px',
+        background: C.sf2,
+        borderRadius: 8,
+        border: `1px solid ${r.ok ? C.green + '33' : C.orange + '33'}`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 18,
+        flexShrink: 0
+      }
+    }, r.ok ? '✅' : '⚠️'), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: r.ok ? C.green : C.orange,
+        marginBottom: 3
+      }
+    }, r.title), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.dust,
+        lineHeight: 1.5
+      }
+    }, r.body)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 6,
+        padding: '12px 14px',
+        background: `${C.red}11`,
+        border: `1px solid ${C.red}33`,
+        borderRadius: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: C.red,
+        marginBottom: 4
+      }
+    }, "⚠️ Before you act on this"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.dust,
+        lineHeight: 1.6
+      }
+    }, "Small coins like this one can lose a large chunk of their value in a single day — sometimes 30–50%. A high Gem Score means \"interesting to watch,\" not \"guaranteed to go up.\" This is for paper trading practice. Never put in money you can't afford to lose."))));
+  }
+
+  /* ── TICKER ──────────────────────────────────────────────── */
+  function Ticker({
+    assets
+  }) {
+    const items = [...assets, ...assets];
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        borderBottom: `1px solid ${C.seam}`,
+        padding: '6px 0',
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "ticker-wrap"
+    }, items.map((a, i) => /*#__PURE__*/React.createElement("span", {
+      key: i,
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        fontSize: 12,
+        fontFamily: 'monospace',
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.dust
+      }
+    }, a.s), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.ink
+      }
+    }, fp(a.p)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: a.ch >= 0 ? C.green : C.red
+      }
+    }, a.ch >= 0 ? '+' : '', a.ch.toFixed(2), "%")))));
+  }
+
+  /* ── MARKET TAB ──────────────────────────────────────────── */
+  function MarketTab({
+    assets,
+    trending,
+    loading,
+    fg
+  }) {
+    const [filter, setFilter] = useState('All');
+    const [coin, setCoin] = useState(null);
+    const cats = ['All', ...new Set(assets.map(a => a.cat))];
+    const shown = filter === 'All' ? assets : assets.filter(a => a.cat === filter);
+    const breadth = Math.round(assets.filter(a => a.ch >= 0).length / assets.length * 100);
+    const advancingLong = assets.filter(a => a.ch >= 2).length;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 16
+      }
+    }, coin && /*#__PURE__*/React.createElement(CoinModal, {
+      coin: coin,
+      onClose: () => setCoin(null)
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3,1fr)',
+        gap: 8,
+        marginBottom: 12
+      }
+    }, [['BREADTH', `${breadth}%`, breadth >= 60 ? C.green : breadth >= 40 ? C.orange : C.red], ['ADVANCING', `${advancingLong} assets`, C.blue], ['ASSETS TRACKED', `${assets.length}`, C.dust]].map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
+      key: l,
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 6,
+        padding: '10px 12px',
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: C.dust,
+        marginBottom: 3
+      }
+    }, l), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 16,
+        fontWeight: 700,
+        color: c
+      }
+    }, v)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 6,
+        flexWrap: 'wrap',
+        marginBottom: 10
+      }
+    }, cats.map(c => /*#__PURE__*/React.createElement("button", {
+      key: c,
+      onClick: () => setFilter(c),
+      style: {
+        padding: '3px 10px',
+        borderRadius: 12,
+        border: `1px solid ${filter === c ? C.blue : C.seam}`,
+        background: filter === c ? `${C.blue}22` : 'transparent',
+        color: filter === c ? C.blue : C.dust,
+        fontSize: 11,
+        fontWeight: filter === c ? 700 : 400,
+        cursor: 'pointer'
+      }
+    }, c))), loading && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.dust,
+        textAlign: 'center',
+        padding: '8px 0'
+      }
+    }, "⟳ Fetching live prices..."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: '68px 1fr 70px 64px 64px 84px 96px',
+        gap: 0,
+        fontSize: 10,
+        color: C.dust,
+        padding: '8px 12px',
+        borderBottom: `1px solid ${C.seam}`,
+        fontWeight: 700,
+        letterSpacing: '.06em',
+        textTransform: 'uppercase'
+      }
+    }, /*#__PURE__*/React.createElement("span", null, "SYM"), /*#__PURE__*/React.createElement("span", null, "NAME"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: 'right'
+      }
+    }, "PRICE"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: 'right'
+      }
+    }, "1H"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: 'right'
+      }
+    }, "24H"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: 'center'
+      }
+    }, "SCORE"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: 'center'
+      }
+    }, "ACTION")), shown.map(a => /*#__PURE__*/React.createElement("div", {
+      key: a.s,
+      onClick: () => setCoin(a),
+      style: {
+        display: 'grid',
+        gridTemplateColumns: '68px 1fr 70px 64px 64px 84px 96px',
+        gap: 0,
+        padding: '9px 12px',
+        borderBottom: `1px solid ${C.seam}20`,
+        alignItems: 'center',
+        cursor: 'pointer',
+        transition: 'background .12s'
+      },
+      onMouseEnter: e => e.currentTarget.style.background = C.sf2,
+      onMouseLeave: e => e.currentTarget.style.background = 'transparent'
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: C.ink,
+        fontWeight: 700
+      }
+    }, a.s), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.ink
+      }
+    }, a.n), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        color: C.dust
+      }
+    }, a.cat)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: 'right',
+        fontFamily: 'monospace',
+        fontSize: 11,
+        color: C.ink
+      }
+    }, fp(a.p)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: 'right',
+        fontFamily: 'monospace',
+        fontSize: 11,
+        fontWeight: 600,
+        color: a.ch1 >= 0 ? C.green : C.red
+      }
+    }, a.ch1 >= 0 ? '+' : '', a.ch1.toFixed(1), "%"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        textAlign: 'right',
+        fontFamily: 'monospace',
+        fontSize: 11,
+        fontWeight: 600,
+        color: a.ch >= 0 ? C.green : C.red
+      }
+    }, a.ch >= 0 ? '+' : '', a.ch.toFixed(1), "%"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 5
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 36,
+        height: 3,
+        background: C.seam,
+        borderRadius: 2,
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: `${a.score}%`,
+        height: '100%',
+        background: sc(a.score),
+        borderRadius: 2
+      }
+    })), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 10,
+        color: sc(a.score),
+        fontWeight: 700
+      }
+    }, a.score)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '2px 7px',
+        borderRadius: 3,
+        fontSize: 10,
+        fontWeight: 700,
+        background: `${ac(a.action)}22`,
+        color: ac(a.action),
+        fontFamily: 'monospace'
+      }
+    }, a.action))))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: C.dust,
+        marginTop: 6,
+        textAlign: 'center'
+      }
+    }, "Click any asset to view chart + OTE Fibonacci levels")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 220,
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        padding: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: C.dust,
+        marginBottom: 8,
+        fontWeight: 700,
+        letterSpacing: '.08em',
+        textTransform: 'uppercase'
+      }
+    }, "Fear & Greed"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center',
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 32,
+        fontWeight: 700,
+        color: fg <= 25 ? C.red : fg <= 45 ? C.orange : fg <= 55 ? C.dust : fg <= 75 ? C.green : C.purple
+      }
+    }, fg), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: C.dust
+      }
+    }, fg <= 25 ? 'EXTREME FEAR' : fg <= 45 ? 'FEAR' : fg <= 55 ? 'NEUTRAL' : fg <= 75 ? 'GREED' : 'EXTREME GREED')), /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: 6,
+        background: C.seam,
+        borderRadius: 3,
+        overflow: 'hidden'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: `${fg}%`,
+        height: '100%',
+        borderRadius: 3,
+        background: `linear-gradient(90deg,${C.red},${C.orange},${C.green},${C.purple})`
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: C.dust,
+        marginTop: 6
+      }
+    }, "Smart DCA: ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: fg <= 25 ? C.red : C.green,
+        fontFamily: 'monospace',
+        fontWeight: 700
+      }
+    }, "×", fg <= 25 ? '3.0' : fg <= 45 ? '2.0' : fg <= 65 ? '1.0' : fg <= 85 ? '0.7' : '0.3'))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        padding: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: C.dust,
+        marginBottom: 8,
+        fontWeight: 700,
+        letterSpacing: '.08em',
+        textTransform: 'uppercase'
+      }
+    }, "Market Breadth"), [['% advancing', `${breadth}%`, C.green], ['Strong moves', `${advancingLong}`, C.blue], ['Regime', breadth >= 60 ? 'BULLISH' : breadth >= 40 ? 'NEUTRAL' : 'BEARISH', breadth >= 60 ? C.green : breadth >= 40 ? C.orange : C.red]].map(([l, v, c]) => /*#__PURE__*/React.createElement("div", {
+      key: l,
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+        fontSize: 11
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.dust
+      }
+    }, l), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        fontWeight: 700,
+        color: c
+      }
+    }, v)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        padding: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: C.dust,
+        marginBottom: 8,
+        fontWeight: 700,
+        letterSpacing: '.08em',
+        textTransform: 'uppercase'
+      }
+    }, "Trending on CoinGecko"), trending.slice(0, 7).map(t => /*#__PURE__*/React.createElement("div", {
+      key: t.s,
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+        fontSize: 11
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 6,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.dust,
+        minWidth: 14
+      }
+    }, "#", t.r), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        fontWeight: 700,
+        color: C.ink
+      }
+    }, t.s)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        color: t.ch >= 0 ? C.green : C.red,
+        fontWeight: 600
+      }
+    }, t.ch >= 0 ? '+' : '', t.ch.toFixed(1), "%"))))));
+  }
+
+  /* ── PAPER TAB — wired to the real backend (server.py) ───────
+     Replaces the original hardcoded demo numbers with live data
+     from /api/portfolio, /api/portfolio/positions, /api/portfolio/trades,
+     /api/portfolio/equity-history, and /api/signals. */
+  function PaperTab({
+    notify
+  }) {
+    const [portfolio, setPortfolio] = useState(null);
+    const [positions, setPositions] = useState([]);
+    const [trades, setTrades] = useState([]);
+    const [equityHist, setEquityHist] = useState([]);
+    const [signals, setSignals] = useState([]);
+    const [err, setErr] = useState('');
+    const seenTrades = useRef(new Set());
+
+    const refresh = useCallback(async () => {
+      try {
+        const [p, pos, tr, eq, sig] = await Promise.all([
+          apiFetch('/api/portfolio'),
+          apiFetch('/api/portfolio/positions'),
+          apiFetch('/api/portfolio/trades?limit=20'),
+          apiFetch('/api/portfolio/equity-history?days=30'),
+          apiFetch('/api/signals?limit=20'),
+        ]);
+        setPortfolio(p);
+        setPositions(pos);
+        setEquityHist(eq);
+        setSignals(sig);
+        // Fire a toast + sound the first time we see a newly-closed trade.
+        tr.forEach(t => {
+          const key = t.id || `${t.symbol}-${t.exit_time}`;
+          if (!seenTrades.current.has(key)) {
+            seenTrades.current.add(key);
+            if (seenTrades.current.size > tr.length) {
+              notify(`${t.exit_reason === 'TAKE_PROFIT' ? '✅ TAKE PROFIT' : '🛑 STOP LOSS'}: ${t.symbol} ${t.pnl >= 0 ? '+' : ''}$${Math.abs(t.pnl).toFixed(0)}`, t.exit_reason === 'TAKE_PROFIT' ? 'tp' : 'sl');
+            }
+          }
+        });
+        setTrades(tr);
+        setErr('');
+      } catch (e) {
+        setErr('Could not reach the NEXUS backend (/api/portfolio). Is server.py running?');
+      }
+    }, [notify]);
+
+    useEffect(() => {
+      refresh();
+      const id = setInterval(refresh, 15000);
+      return () => clearInterval(id);
+    }, [refresh]);
+
+    if (err) {
+      return /*#__PURE__*/React.createElement("div", {
+        style: { padding: 20, textAlign: 'center', color: C.red, background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8 }
+      }, err);
+    }
+    if (!portfolio) {
+      return /*#__PURE__*/React.createElement("div", {
+        style: { padding: 20, textAlign: 'center', color: C.dust }
+      }, /*#__PURE__*/React.createElement(Spin, null), " Loading live portfolio...");
+    }
+
+    const g = portfolio.graduation || {};
+    const gateRows = [
+      ['Days', g.days], ['Sharpe', g.sharpe], ['Win Rate', g.win_rate], ['Max DD', g.max_dd], ['Trades', g.trades],
+    ];
+    const passed = gateRows.filter(([, cell]) => cell && cell.met).length;
+    const phase = g.all_met ? 'PRO_TRADER' : (g.days && g.days.current >= 10) ? 'GRADUATION_REVIEW' : 'APPRENTICE';
+    const pc = { APPRENTICE: C.blue, GRADUATION_REVIEW: C.orange, PRO_TRADER: C.gold }[phase];
+    const m = portfolio.metrics || {};
+
+    return /*#__PURE__*/React.createElement("div", {
+      style: { display: 'flex', flexDirection: 'column', gap: 14 }
+    },
+      /*#__PURE__*/React.createElement("div", {
+        style: { padding: '12px 16px', background: `${pc}11`, border: `1px solid ${pc}33`, borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+      },
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: pc, fontWeight: 700 } }, `Paper trading active — ${portfolio.mode} mode, building system trust`),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: C.dust, marginTop: 2 } }, "Live from your NEXUS backend · No real capital at risk")
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { textAlign: 'right' } },
+          /*#__PURE__*/React.createElement("div", { style: { fontFamily: 'monospace', fontWeight: 700, color: pc } }, `Day ${(g.days ? g.days.current : 0).toFixed(1)} of ${g.days ? g.days.target : 30}`),
+          /*#__PURE__*/React.createElement("div", { style: { width: 100, height: 4, background: C.seam, borderRadius: 2, marginTop: 4, overflow: 'hidden' } },
+            /*#__PURE__*/React.createElement("div", { style: { width: `${Math.min(100, (g.days ? g.days.current / g.days.target : 0) * 100)}%`, height: '100%', background: pc, borderRadius: 2 } })
+          )
+        )
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8 } },
+        gateRows.map(([l, cell]) => cell && /*#__PURE__*/React.createElement("div", {
+          key: l, style: { background: C.sf, border: `1px solid ${cell.met ? C.green + '44' : C.seam}`, borderRadius: 6, padding: '12px 8px', textAlign: 'center' }
+        },
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 18, marginBottom: 4 } }, cell.met ? '✅' : '⬜'),
+          /*#__PURE__*/React.createElement("div", { style: { fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: cell.met ? C.green : C.orange } }, typeof cell.current === 'number' ? cell.current.toFixed(1) : cell.current),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: C.dust, marginTop: 2 } }, l),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 9, color: C.dust, opacity: .6 } }, `target ${cell.target}`)
+        ))
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { textAlign: 'center', fontSize: 12, color: passed === 5 ? C.green : C.dust, padding: '6px 0' } },
+        `🔒 ${passed}/5 criteria met — ${g.all_met ? 'qualified for live trading' : 'complete all to unlock live trading'}`
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+        /*#__PURE__*/React.createElement("div", { style: { background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8, padding: 14 } },
+          /*#__PURE__*/React.createElement(ST, { ch: "Portfolio Metrics" }),
+          [
+            ['Portfolio Value', fp(portfolio.equity), C.ink],
+            ['Cash', fp(portfolio.cash), C.ink],
+            ['Total Return', `${portfolio.total_return >= 0 ? '+' : ''}${portfolio.total_return.toFixed(2)}%`, portfolio.total_return >= 0 ? C.green : C.red],
+            ['Sharpe Ratio', (m.sharpe ?? 0).toFixed(2), C.blue],
+            ['Win Rate', `${(m.win_rate ?? 0).toFixed(1)}%`, (m.win_rate ?? 0) >= 45 ? C.green : C.orange],
+            ['Max Drawdown', `${(m.max_drawdown ?? 0).toFixed(1)}%`, C.orange],
+          ].map(([l, v, c]) => /*#__PURE__*/React.createElement("div", { key: l, style: { display: 'flex', justifyContent: 'space-between', marginBottom: 7, fontSize: 12 } },
+            /*#__PURE__*/React.createElement("span", { style: { color: C.dust } }, l),
+            /*#__PURE__*/React.createElement("span", { style: { fontFamily: 'monospace', fontWeight: 700, color: c } }, v)
+          ))
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8, padding: 14 } },
+          /*#__PURE__*/React.createElement(ST, { ch: "Equity Curve" }),
+          equityHist.length >= 2
+            ? /*#__PURE__*/React.createElement(MiniChart, { data: equityHist, color: C.green, h: 100 })
+            : /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: C.dust, textAlign: 'center', padding: '20px 0' } }, "Not enough equity history yet — snapshots accumulate over time."),
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: C.dust, marginTop: 6, textAlign: 'center' } }, `$${portfolio.start_capital.toLocaleString()} → ${fp(portfolio.equity)}`)
+        )
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8, padding: 14 } },
+        /*#__PURE__*/React.createElement(ST, { ch: `Open positions (${positions.length})` }),
+        positions.length === 0
+          ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: C.dust } }, "No open positions.")
+          : /*#__PURE__*/React.createElement("div", null, positions.map(p => /*#__PURE__*/React.createElement("div", {
+              key: p.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${C.seam}20`, fontSize: 12 }
+            },
+              /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 10, alignItems: 'center' } },
+                /*#__PURE__*/React.createElement("span", { style: { fontFamily: 'monospace', fontWeight: 700, color: C.ink, minWidth: 56 } }, p.symbol),
+                /*#__PURE__*/React.createElement(Badge, { label: p.pattern, color: C.blue }),
+                /*#__PURE__*/React.createElement("span", { style: { color: C.dust, fontSize: 11 } }, `entry ${fp(p.entry_price)}`)
+              ),
+              /*#__PURE__*/React.createElement("span", { style: { fontFamily: 'monospace', fontWeight: 700, color: p.unrealized_pnl >= 0 ? C.green : C.red } },
+                `${p.unrealized_pnl >= 0 ? '+' : ''}$${p.unrealized_pnl.toFixed(2)} (${p.unrealized_pct.toFixed(2)}%)`)
+            )))
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8, padding: 14 } },
+        /*#__PURE__*/React.createElement(ST, { ch: `Recent signals (score ≥ 75 enters a position)` }),
+        signals.length === 0
+          ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: C.dust } }, "No signals fired yet.")
+          : signals.slice(0, 10).map((s, i) => /*#__PURE__*/React.createElement("div", {
+              key: s.id || i, style: { display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: `1px solid ${C.seam}20`, fontSize: 12 }
+            },
+              /*#__PURE__*/React.createElement("span", { style: { fontFamily: 'monospace', fontWeight: 700, color: C.ink, minWidth: 52 } }, s.symbol),
+              /*#__PURE__*/React.createElement(Badge, { label: s.score, color: sc(s.score) }),
+              /*#__PURE__*/React.createElement("span", { style: { color: C.dust, flex: 1, fontSize: 11 } }, s.pattern),
+              /*#__PURE__*/React.createElement("span", { style: { color: s.entered ? C.green : C.dust, fontSize: 11, fontWeight: 600 } }, s.entered ? 'Entered' : 'Skipped')
+            ))
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8, padding: 14 } },
+        /*#__PURE__*/React.createElement(ST, { ch: `Trade history — ${trades.length} closed trades` }),
+        trades.length === 0
+          ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: C.dust } }, "No closed trades yet.")
+          : trades.slice(0, 10).map((t, i) => /*#__PURE__*/React.createElement("div", {
+              key: t.id || i, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${C.seam}20` }
+            },
+              /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 10, alignItems: 'center' } },
+                /*#__PURE__*/React.createElement("span", { style: { fontFamily: 'monospace', fontWeight: 700, color: C.ink, minWidth: 48 } }, t.symbol),
+                /*#__PURE__*/React.createElement(Badge, { label: t.exit_reason, color: t.exit_reason === 'TAKE_PROFIT' ? C.green : C.red }),
+                /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: C.dust } }, t.exit_time ? new Date(t.exit_time).toLocaleDateString() : '')
+              ),
+              /*#__PURE__*/React.createElement("span", { style: { fontFamily: 'monospace', fontWeight: 700, fontSize: 12, color: t.pnl >= 0 ? C.green : C.red } }, `${t.pnl >= 0 ? '+' : ''}$${Math.abs(t.pnl).toFixed(2)}`)
+            ))
+      )
+    );
+  }
+
+  /* ── GEMS TAB ────────────────────────────────────────────── */
+  function GemsTab() {
+    const [selectedGem, setSelectedGem] = useState(null);
+    const [gems, setGems] = useState([]);
+    const [scanning, setScanning] = useState(false);
+    const [scanMsg, setScanMsg] = useState('Click "Scan Now" to pull live mid/small-cap data from CoinGecko.');
+    const scan = async () => {
+      setScanning(true);
+      setScanMsg('Scanning mid-caps server-side...');
+      try {
+        const r = await fetch('/api/gems/scan');
+        const d = await r.json();
+        if (d.error) {
+          setScanMsg('Scan failed: ' + d.error);
+          setScanning(false);
+          return;
+        }
+        // Server returns gems already scored, sorted, and top-8.
+        // Convert `ratio` from number back to string for existing display code.
+        const scored = (d.gems || []).map(g => ({ ...g, ratio: String(g.ratio) }));
+        setGems(scored);
+        setScanMsg(`Found ${scored.length} gems from ${d.scanned} coins (cached 5 min)`);
+      } catch (e) {
+        setScanMsg('Backend unreachable — try again shortly');
+      }
+      setScanning(false);
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: C.dust
+      }
+    }, "Scanning 300+ mid/small-cap coins · Vol/MC ratio is the primary pre-pump signal"), /*#__PURE__*/React.createElement("button", {
+      onClick: scan,
+      disabled: scanning,
+      style: {
+        padding: '8px 20px',
+        background: scanning ? C.seam : `${C.purple}22`,
+        border: `1px solid ${scanning ? C.seam : C.purple}`,
+        borderRadius: 6,
+        color: scanning ? C.dust : C.purple,
+        fontSize: 13,
+        fontWeight: 700,
+        cursor: scanning ? 'wait' : 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8
+      }
+    }, scanning && /*#__PURE__*/React.createElement(Spin, null), scanning ? scanMsg : '💎 Scan Now')), scanMsg && !scanning && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: C.teal,
+        padding: '6px 0'
+      }
+    }, scanMsg), selectedGem && /*#__PURE__*/React.createElement(GemModal, {
+      gem: selectedGem,
+      onClose: () => setSelectedGem(null)
+    }), gems.length === 0 && !scanning && /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 12, color: C.dust, textAlign: 'center', padding: '30px 0', background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8 }
+    }, "No scan run yet this session."), gems.map((g, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      onClick: () => setSelectedGem(g),
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        padding: 14,
+        cursor: 'pointer',
+        transition: 'border-color .15s'
+      },
+      onMouseEnter: e => e.currentTarget.style.borderColor = C.purple,
+      onMouseLeave: e => e.currentTarget.style.borderColor = C.seam
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 10,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 14,
+        fontWeight: 700,
+        color: C.ink
+      }
+    }, g.s), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        color: C.dust
+      }
+    }, g.n), /*#__PURE__*/React.createElement(Badge, {
+      label: `Vol/MC ${g.ratio}`,
+      color: C.purple
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 8,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 20,
+        fontWeight: 700,
+        color: sc(g.score)
+      }
+    }, g.score))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 16,
+        marginBottom: 6
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: C.dust
+      }
+    }, "MCap: ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.ink
+      }
+    }, g.mc)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: C.dust
+      }
+    }, "24h: ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: 'monospace',
+        color: typeof g.mom === 'number' && g.mom >= 0 ? C.green : C.red
+      }
+    }, typeof g.mom === 'number' ? (g.mom >= 0 ? '+' : '') + g.mom.toFixed(1) + '%' : g.mom))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.dust,
+        fontStyle: 'italic'
+      }
+    }, "\"", g.why, "\""), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: C.purple,
+        marginTop: 8,
+        fontWeight: 600
+      }
+    }, "👆 Tap to see why, with chart"))));
+  }
+
+  /* ── PATTERNS TAB — reference/educational only, unchanged ─── */
+  function Sparkline({
+    vals,
+    color,
+    w = 80,
+    h = 36
+  }) {
+    if (!vals || !vals.length) return null;
+    const mn = Math.min(...vals),
+      mx = Math.max(...vals),
+      rng = mx - mn || 1;
+    const px = i => i / (vals.length - 1) * (w - 4) + 2;
+    const py = v => h - 2 - (v - mn) / rng * (h - 4);
+    const pts = vals.map((v, i) => `${px(i)},${py(v)}`).join(' ');
+    const area = `M2,${h} ${vals.map((v, i) => `L${px(i)},${py(v)}`).join(' ')} L${px(vals.length - 1)},${h} Z`;
+    return /*#__PURE__*/React.createElement("svg", {
+      viewBox: `0 0 ${w} ${h}`,
+      style: {
+        width: w,
+        height: h
+      },
+      preserveAspectRatio: "none"
+    }, /*#__PURE__*/React.createElement("defs", null, /*#__PURE__*/React.createElement("linearGradient", {
+      id: `sg${color.replace('#', '')}`,
+      x1: "0",
+      y1: "0",
+      x2: "0",
+      y2: "1"
+    }, /*#__PURE__*/React.createElement("stop", {
+      offset: "0%",
+      stopColor: color,
+      stopOpacity: ".3"
+    }), /*#__PURE__*/React.createElement("stop", {
+      offset: "100%",
+      stopColor: color,
+      stopOpacity: "0"
+    }))), /*#__PURE__*/React.createElement("path", {
+      d: area,
+      fill: `url(#sg${color.replace('#', '')})`
+    }), /*#__PURE__*/React.createElement("polyline", {
+      points: pts,
+      fill: "none",
+      stroke: color,
+      strokeWidth: "1.5"
+    }));
+  }
+  function genSparkline(ch7d, seed = 42) {
+    const pts = [];
+    let v = 100;
+    for (let i = 0; i < 18; i++) {
+      const trend = ch7d / 100 * (i / 17);
+      const noise = Math.sin(i * 2.1 + seed) * 2.5 + Math.cos(i * 1.4 + seed) * 1.5;
+      v = 100 * (1 + trend) + noise;
+      pts.push(v);
+    }
+    return pts;
+  }
+
+  /* ── AI TAB — briefing + whitepaper analyzer proxied through
+     the backend, so your Anthropic key never touches the browser ── */
+  function AITab({
+    assets,
+    fg
+  }) {
+    const [brief, setBrief] = useState('');
+    const [briefLoading, setBriefLoading] = useState(false);
+    const [wpText, setWpText] = useState('');
+    const [wpLoading, setWpLoading] = useState(false);
+    const [wpResult, setWpResult] = useState(null);
+    const [err, setErr] = useState('');
+    const genBrief = async () => {
+      setBriefLoading(true);
+      setErr('');
+      try {
+        const res = await fetch('/api/ai/brief', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fear_greed: fg, top_assets: assets.slice(0, 5) })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const d = await res.json();
+        setBrief(d.text || '');
+      } catch (e) {
+        setErr('Backend AI endpoint not available yet (/api/ai/brief) — see note below.');
+      }
+      setBriefLoading(false);
+    };
+    const analyzeWP = async () => {
+      if (!wpText.trim()) { setErr('Paste some project text first'); return; }
+      setWpLoading(true);
+      setErr('');
+      setWpResult(null);
+      try {
+        const res = await fetch('/api/ai/analyze-project', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: wpText.slice(0, 3000) })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        setWpResult(await res.json());
+      } catch (e) {
+        setErr('Backend AI endpoint not available yet (/api/ai/analyze-project) — see note below.');
+      }
+      setWpLoading(false);
+    };
+    const gc = g => ({
+      'A': C.green,
+      'B': C.teal,
+      'C': C.orange,
+      'D': C.red,
+      'F': C.red
+    })[g] || C.dust;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: `${C.orange}11`,
+        border: `1px solid ${C.orange}33`,
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 12,
+        color: C.orange
+      }
+    }, "⚠️ This tab calls your backend (", /*#__PURE__*/React.createElement("code", null, "/api/ai/brief"), " and ", /*#__PURE__*/React.createElement("code", null, "/api/ai/analyze-project"), "), not Anthropic directly from the browser — so your API key stays server-side. Those two endpoints don't exist on server.py yet; ask Claude to add them (a few lines using your ANTHROPIC_API_KEY env var) before this tab will work."), err && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.red
+      }
+    }, err), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        padding: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(ST, {
+      ch: "Morning Briefing"
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: C.dust,
+        marginTop: -8
+      }
+    }, "AI-generated daily market analysis based on live data")), /*#__PURE__*/React.createElement("button", {
+      onClick: genBrief,
+      disabled: briefLoading,
+      style: {
+        padding: '8px 18px',
+        background: briefLoading ? C.seam : `${C.gold}22`,
+        border: `1px solid ${briefLoading ? C.seam : C.gold}`,
+        borderRadius: 6,
+        color: briefLoading ? C.dust : C.gold,
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: briefLoading ? 'wait' : 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6
+      }
+    }, briefLoading && /*#__PURE__*/React.createElement(Spin, null), briefLoading ? 'Generating...' : 'Generate Briefing')), brief ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: C.ink,
+        lineHeight: 1.8,
+        whiteSpace: 'pre-wrap',
+        padding: '12px 14px',
+        background: C.sf2,
+        borderRadius: 6
+      }
+    }, brief) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.dust,
+        padding: '12px 14px',
+        background: C.sf2,
+        borderRadius: 6,
+        textAlign: 'center'
+      }
+    }, "Click \"Generate Briefing\" for an AI-written market analysis based on current Fear & Greed and top asset scores.")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        padding: 14
+      }
+    }, /*#__PURE__*/React.createElement(ST, {
+      ch: "Whitepaper / Project Analyzer"
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.dust,
+        marginBottom: 10
+      }
+    }, "Paste any whitepaper, project announcement, or token description. Claude scores it across 5 dimensions and flags green and red signals."), /*#__PURE__*/React.createElement("textarea", {
+      value: wpText,
+      onChange: e => setWpText(e.target.value),
+      placeholder: "Paste whitepaper text, project description, or token announcement...",
+      style: {
+        width: '100%',
+        minHeight: 100,
+        background: C.sf2,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 6,
+        padding: '10px 12px',
+        color: C.ink,
+        fontSize: 12,
+        resize: 'vertical'
+      }
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: analyzeWP,
+      disabled: wpLoading || !wpText.trim(),
+      style: {
+        marginTop: 10,
+        padding: '9px 22px',
+        background: wpLoading ? C.seam : `${C.blue}22`,
+        border: `1px solid ${wpLoading ? C.seam : C.blue}`,
+        borderRadius: 6,
+        color: wpLoading ? C.dust : C.blue,
+        fontSize: 13,
+        fontWeight: 700,
+        cursor: wpLoading ? 'wait' : 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6
+      }
+    }, wpLoading && /*#__PURE__*/React.createElement(Spin, null), wpLoading ? 'Analyzing...' : 'Analyze Project')), wpResult && /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        padding: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 15,
+        fontWeight: 700,
+        color: C.ink
+      }
+    }, wpResult.project_name || 'Analysis'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 14,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        color: C.dust,
+        marginBottom: 2
+      }
+    }, "NEXUS SCORE"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 22,
+        fontWeight: 700,
+        color: sc(wpResult.nexus_score || 50)
+      }
+    }, wpResult.nexus_score || '—')), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        color: C.dust,
+        marginBottom: 2
+      }
+    }, "GRADE"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 22,
+        fontWeight: 700,
+        color: gc(wpResult.overall_grade)
+      }
+    }, wpResult.overall_grade)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(5,1fr)',
+        gap: 8,
+        marginBottom: 14
+      }
+    }, [['Technical', wpResult.technical_depth], ['Tokenomics', wpResult.tokenomics], ['Team', wpResult.team_transparency], ['Innovation', wpResult.innovation], ['Market Fit', wpResult.market_fit]].map(([l, v]) => /*#__PURE__*/React.createElement("div", {
+      key: l,
+      style: {
+        background: C.sf2,
+        borderRadius: 6,
+        padding: '8px',
+        textAlign: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontSize: 18,
+        fontWeight: 700,
+        color: sc(v || 50)
+      }
+    }, v || '—'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        color: C.dust,
+        marginTop: 2
+      }
+    }, l)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: C.ink,
+        lineHeight: 1.7,
+        padding: '10px 12px',
+        background: C.sf2,
+        borderRadius: 6,
+        marginBottom: 12
+      }
+    }, wpResult.summary), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(ST, {
+      ch: "Green Flags"
+    }), (wpResult.green_flags || []).map((f, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        fontSize: 12,
+        color: C.green,
+        marginBottom: 6
+      }
+    }, "✓ ", f))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(ST, {
+      ch: "Red Flags"
+    }), (wpResult.red_flags || []).map((f, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        fontSize: 12,
+        color: C.red,
+        marginBottom: 6
+      }
+    }, "⚠ ", f))))));
+  }
+
+  /* ── TRENDING TAB ────────────────────────────────────────── */
+  function TrendingTab({
+    assets,
+    trending
+  }) {
+    const sorted = [...assets].sort((a, b) => b.ch - a.ch);
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        padding: 14
+      }
+    }, /*#__PURE__*/React.createElement(ST, {
+      ch: "🔥 Trending on CoinGecko — Top 7 by search"
+    }), trending.map(t => {
+      const spark = genSparkline(t.ch, t.s.charCodeAt(0));
+      return /*#__PURE__*/React.createElement("div", {
+        key: t.s,
+        style: {
+          display: 'grid',
+          gridTemplateColumns: '20px 68px 1fr 90px 64px',
+          alignItems: 'center',
+          gap: 10,
+          padding: '10px 0',
+          borderBottom: `1px solid ${C.seam}20`
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontFamily: 'monospace',
+          fontSize: 12,
+          color: C.dust
+        }
+      }, "#", t.r), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontFamily: 'monospace',
+          fontWeight: 700,
+          color: C.ink,
+          fontSize: 13
+        }
+      }, t.s), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 10,
+          color: C.dust
+        }
+      }, t.n)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          paddingRight: 8
+        }
+      }, /*#__PURE__*/React.createElement(Sparkline, {
+        vals: spark,
+        color: t.ch >= 0 ? C.green : C.red,
+        w: 100,
+        h: 36
+      })), /*#__PURE__*/React.createElement("div", {
+        style: {
+          textAlign: 'right'
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontFamily: 'monospace',
+          fontSize: 13,
+          fontWeight: 700,
+          color: t.ch >= 0 ? C.green : C.red
+        }
+      }, t.ch >= 0 ? '+' : '', t.ch.toFixed(1), "%"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 9,
+          color: C.dust
+        }
+      }, "7d change")), /*#__PURE__*/React.createElement(Badge, {
+        label: `Rank #${t.r}`,
+        color: C.purple
+      }));
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        padding: 14
+      }
+    }, /*#__PURE__*/React.createElement(ST, {
+      ch: "Top Gainers · 24h"
+    }), sorted.filter(a => a.ch >= 0).slice(0, 7).map(a => {
+      const spark = genSparkline(a.ch, a.s.charCodeAt(0));
+      return /*#__PURE__*/React.createElement("div", {
+        key: a.s,
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '7px 0',
+          borderBottom: `1px solid ${C.seam}20`
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 8,
+          alignItems: 'center'
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontFamily: 'monospace',
+          fontSize: 12,
+          color: C.ink,
+          fontWeight: 700,
+          minWidth: 52
+        }
+      }, a.s), /*#__PURE__*/React.createElement(Sparkline, {
+        vals: spark,
+        color: C.green,
+        w: 60,
+        h: 28
+      })), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontFamily: 'monospace',
+          fontSize: 12,
+          color: C.green,
+          fontWeight: 700
+        }
+      }, "+", a.ch.toFixed(2), "%"));
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.sf,
+        border: `1px solid ${C.seam}`,
+        borderRadius: 8,
+        padding: 14
+      }
+    }, /*#__PURE__*/React.createElement(ST, {
+      ch: "Top Losers · 24h"
+    }), sorted.filter(a => a.ch < 0).reverse().slice(0, 7).map(a => {
+      const spark = genSparkline(a.ch, a.s.charCodeAt(0));
+      return /*#__PURE__*/React.createElement("div", {
+        key: a.s,
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '7px 0',
+          borderBottom: `1px solid ${C.seam}20`
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 8,
+          alignItems: 'center'
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontFamily: 'monospace',
+          fontSize: 12,
+          color: C.ink,
+          fontWeight: 700,
+          minWidth: 52
+        }
+      }, a.s), /*#__PURE__*/React.createElement(Sparkline, {
+        vals: spark,
+        color: C.red,
+        w: 60,
+        h: 28
+      })), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontFamily: 'monospace',
+          fontSize: 12,
+          color: C.red,
+          fontWeight: 700
+        }
+      }, a.ch.toFixed(2), "%"));
+    }))));
+  }
+
+  /* ── REAL INDICATOR MATH (plain JS, no library) ─────────────
+     Every overlay in the Patterns tab is computed from actual
+     fetched candles — not illustrated. */
+  function sma(vals, len) {
+    const out = new Array(vals.length).fill(null);
+    let sum = 0;
+    for (let i = 0; i < vals.length; i++) {
+      sum += vals[i];
+      if (i >= len) sum -= vals[i - len];
+      if (i >= len - 1) out[i] = sum / len;
+    }
+    return out;
+  }
+  function emaCalc(vals, len) {
+    const out = new Array(vals.length).fill(null);
+    const k = 2 / (len + 1);
+    let prev = null;
+    for (let i = 0; i < vals.length; i++) {
+      if (vals[i] == null) continue;
+      if (prev == null) {
+        if (i >= len - 1) {
+          const seed = vals.slice(i - len + 1, i + 1).reduce((a, b) => a + b, 0) / len;
+          prev = seed;
+          out[i] = seed;
+        }
+      } else {
+        prev = vals[i] * k + prev * (1 - k);
+        out[i] = prev;
+      }
+    }
+    return out;
+  }
+  function rsiCalc(closes, len = 14) {
+    const out = new Array(closes.length).fill(null);
+    let gainSum = 0, lossSum = 0;
+    for (let i = 1; i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      const gain = Math.max(diff, 0), loss = Math.max(-diff, 0);
+      if (i <= len) {
+        gainSum += gain; lossSum += loss;
+        if (i === len) {
+          const rs = lossSum === 0 ? 100 : gainSum / (lossSum || 1e-9);
+          out[i] = 100 - 100 / (1 + rs);
+        }
+      } else {
+        gainSum = (gainSum * (len - 1) + gain) / len;
+        lossSum = (lossSum * (len - 1) + loss) / len;
+        const rs = lossSum === 0 ? 100 : gainSum / (lossSum || 1e-9);
+        out[i] = 100 - 100 / (1 + rs);
+      }
+    }
+    return out;
+  }
+  function macdCalc(closes, fast = 12, slow = 26, signalLen = 9) {
+    const eFast = emaCalc(closes, fast), eSlow = emaCalc(closes, slow);
+    const line = closes.map((_, i) => (eFast[i] != null && eSlow[i] != null) ? eFast[i] - eSlow[i] : null);
+    const clean = line.map(v => v == null ? 0 : v);
+    const sig = emaCalc(clean, signalLen);
+    const hist = line.map((v, i) => (v != null && sig[i] != null) ? v - sig[i] : null);
+    return { line, sig, hist };
+  }
+  function stochRsiCalc(closes, rsiLen = 14, stochLen = 14, smoothK = 3, smoothD = 3) {
+    const r = rsiCalc(closes, rsiLen);
+    const raw = r.map((v, i) => {
+      if (v == null) return null;
+      const window = r.slice(Math.max(0, i - stochLen + 1), i + 1).filter(x => x != null);
+      if (window.length < stochLen) return null;
+      const mn = Math.min(...window), mx = Math.max(...window);
+      return mx === mn ? 50 : ((v - mn) / (mx - mn)) * 100;
+    });
+    const cleanRaw = raw.map(v => v == null ? 0 : v);
+    const k = sma(cleanRaw, smoothK).map((v, i) => raw[i] == null ? null : v);
+    const cleanK = k.map(v => v == null ? 0 : v);
+    const d = sma(cleanK, smoothD).map((v, i) => k[i] == null ? null : v);
+    return { k, d };
+  }
+  function findSwing(highs, lows) {
+    let hiIdx = 0, loIdx = 0;
+    for (let i = 0; i < highs.length; i++) {
+      if (highs[i] > highs[hiIdx]) hiIdx = i;
+      if (lows[i] < lows[loIdx]) loIdx = i;
+    }
+    return { hiIdx, loIdx, hi: highs[hiIdx], lo: lows[loIdx] };
+  }
+
+  /* ── REAL CANDLESTICK CHART (static, course-deck style) ──────
+     Renders actual OHLC bars — green up-candles, red down-candles,
+     thin wicks, gridlines, right-side price axis. No animation. */
+  function CandlestickChart({ candles, overlays, annotations, subpanel, height = 340 }) {
+    if (!candles || candles.length < 2) {
+      return React.createElement("div", {
+        style: { padding: 30, textAlign: 'center', color: C.dust, background: C.sf2, borderRadius: 8 }
+      }, "Loading real candles...");
+    }
+    const W = 720, padL = 8, padR = 56, padT = 14, padB = subpanel ? 8 : 20;
+    const mainH = subpanel ? height * 0.68 : height;
+    const subH = subpanel ? height * 0.28 : 0;
+    const gap = subpanel ? height * 0.04 : 0;
+    const highs = candles.map(c => c.high), lows = candles.map(c => c.low);
+    const overlayVals = (overlays || []).flatMap(o => o.values ? o.values.filter(v => v != null) : (o.hline != null ? [o.hline] : []));
+    const maxP = Math.max(...highs, ...overlayVals);
+    const minP = Math.min(...lows, ...overlayVals);
+    const range = (maxP - minP) || 1;
+    const n = candles.length;
+    const cw = (W - padL - padR) / n;
+    const x = i => padL + i * cw + cw / 2;
+    const y = v => padT + ((maxP - v) / range) * (mainH - padT - padB);
+    const bodyW = Math.max(1.5, cw * 0.6);
+    const tickVals = Array.from({ length: 5 }, (_, i) => minP + (range * i) / 4);
+
+    let subEl = null;
+    if (subpanel) {
+      const vals = subpanel.values.filter(v => v != null);
+      const subMax = subpanel.fixedRange ? subpanel.fixedRange[1] : Math.max(...vals, 0);
+      const subMin = subpanel.fixedRange ? subpanel.fixedRange[0] : Math.min(...vals, 0);
+      const subRange = (subMax - subMin) || 1;
+      const sy = v => padT + mainH + gap + subH - ((v - subMin) / subRange) * subH;
+      const zeroY = sy(subpanel.fixedRange ? subMin : 0);
+      subEl = React.createElement("g", null,
+        React.createElement("line", { x1: padL, y1: zeroY, x2: W - padR, y2: zeroY, stroke: C.seam, strokeWidth: 0.6 }),
+        subpanel.type === 'hist'
+          ? subpanel.values.map((v, i) => v == null ? null : React.createElement("rect", {
+              key: i, x: x(i) - bodyW / 2, y: Math.min(sy(v), zeroY),
+              width: bodyW, height: Math.abs(sy(v) - zeroY),
+              fill: v >= 0 ? C.green : C.red, opacity: 0.8
+            }))
+          : (subpanel.lines || [{ values: subpanel.values, color: subpanel.color || C.blue }]).map((ln, li) =>
+              React.createElement("polyline", {
+                key: li, fill: "none", stroke: ln.color, strokeWidth: 1.4,
+                points: ln.values.map((v, i) => v == null ? null : `${x(i)},${sy(v)}`).filter(Boolean).join(' ')
+              })),
+        subpanel.bands && subpanel.bands.map((b, i) => React.createElement("line", {
+          key: 'b' + i, x1: padL, y1: sy(b), x2: W - padR, y2: sy(b),
+          stroke: C.dust, strokeWidth: 0.6, strokeDasharray: "3 3"
+        })),
+        React.createElement("text", {
+          x: padL, y: padT + mainH + gap + 10, fill: C.dust, fontSize: 9, fontFamily: "monospace"
+        }, subpanel.label)
+      );
+    }
+
+    return React.createElement("svg", {
+      viewBox: `0 0 ${W} ${height}`, style: { width: '100%', height, background: C.sf2, borderRadius: 8 }
+    },
+      tickVals.map((v, i) => React.createElement("g", { key: 'g' + i },
+        React.createElement("line", { x1: padL, y1: y(v), x2: W - padR, y2: y(v), stroke: C.seam, strokeWidth: 0.5 }),
+        React.createElement("text", { x: W - padR + 4, y: y(v) + 3, fill: C.dust, fontSize: 8.5, fontFamily: "monospace" }, fp(v))
+      )),
+      candles.map((c, i) => {
+        const up = c.close >= c.open;
+        const col = up ? C.green : C.red;
+        return React.createElement("g", { key: 'c' + i },
+          React.createElement("line", { x1: x(i), y1: y(c.high), x2: x(i), y2: y(c.low), stroke: col, strokeWidth: 1 }),
+          React.createElement("rect", {
+            x: x(i) - bodyW / 2, y: Math.min(y(c.open), y(c.close)),
+            width: bodyW, height: Math.max(1, Math.abs(y(c.open) - y(c.close))),
+            fill: col
+          })
+        );
+      }),
+      (overlays || []).filter(o => o.values).map((o, oi) => React.createElement("polyline", {
+        key: 'o' + oi, fill: "none", stroke: o.color, strokeWidth: 1.6,
+        strokeDasharray: o.dashed ? "5 3" : "0",
+        points: o.values.map((v, i) => v == null ? null : `${x(i)},${y(v)}`).filter(Boolean).join(' ')
+      })),
+      (overlays || []).filter(o => o.hline != null).map((o, oi) => React.createElement("g", { key: 'h' + oi },
+        React.createElement("line", {
+          x1: padL, y1: y(o.hline), x2: W - padR, y2: y(o.hline),
+          stroke: o.color, strokeWidth: o.emphasize ? 1.6 : 0.8,
+          strokeDasharray: o.emphasize ? "0" : "4 3"
+        }),
+        React.createElement("text", {
+          x: W - padR + 4, y: y(o.hline) - 3, fill: o.color, fontSize: 9, fontFamily: "monospace"
+        }, o.label)
+      )),
+      // Annotations: labels/lines/brackets drawn on top of the chart for
+      // textbook pattern illustrations (Head, Left Shoulder, Neckline, etc.)
+      (annotations || []).map((a, ai) => {
+        if (a.type === 'label') {
+          // Text label at (candleIndex, price), optional connecting line to the candle
+          const px = x(a.candle), py = y(a.price);
+          const dy = a.above ? -14 : 22;
+          return React.createElement("g", { key: 'a' + ai },
+            a.leader && React.createElement("line", {
+              x1: px, y1: py, x2: px, y2: py + dy - (a.above ? -4 : 4),
+              stroke: a.color || C.ink, strokeWidth: 0.6, strokeDasharray: "2 2"
+            }),
+            React.createElement("rect", {
+              x: px - (a.label.length * 3.2), y: py + dy - 8,
+              width: a.label.length * 6.4, height: 12,
+              fill: C.sf, stroke: a.color || C.ink, strokeWidth: 0.6, rx: 2
+            }),
+            React.createElement("text", {
+              x: px, y: py + dy, fill: a.color || C.ink,
+              fontSize: 9.5, fontFamily: "monospace", fontWeight: 700,
+              textAnchor: "middle"
+            }, a.label)
+          );
+        }
+        if (a.type === 'line') {
+          // Straight line from (candle1, price1) to (candle2, price2)
+          return React.createElement("g", { key: 'a' + ai },
+            React.createElement("line", {
+              x1: x(a.from.candle), y1: y(a.from.price),
+              x2: x(a.to.candle), y2: y(a.to.price),
+              stroke: a.color || C.ink, strokeWidth: 1.2,
+              strokeDasharray: a.dashed ? "4 3" : "0"
+            }),
+            a.label && React.createElement("text", {
+              x: (x(a.from.candle) + x(a.to.candle)) / 2,
+              y: (y(a.from.price) + y(a.to.price)) / 2 - 5,
+              fill: a.color || C.ink, fontSize: 9, fontFamily: "monospace"
+            }, a.label)
+          );
+        }
+        if (a.type === 'bracket') {
+          // Vertical bracket showing a measurement (e.g. head height, target)
+          const px = x(a.candle);
+          const yTop = y(a.top), yBot = y(a.bot);
+          return React.createElement("g", { key: 'a' + ai },
+            React.createElement("line", { x1: px, y1: yTop, x2: px, y2: yBot,
+              stroke: a.color || C.dust, strokeWidth: 1 }),
+            React.createElement("line", { x1: px - 4, y1: yTop, x2: px + 4, y2: yTop,
+              stroke: a.color || C.dust, strokeWidth: 1 }),
+            React.createElement("line", { x1: px - 4, y1: yBot, x2: px + 4, y2: yBot,
+              stroke: a.color || C.dust, strokeWidth: 1 }),
+            React.createElement("text", {
+              x: px + 8, y: (yTop + yBot) / 2 + 3,
+              fill: a.color || C.dust, fontSize: 9, fontFamily: "monospace"
+            }, a.label)
+          );
+        }
+        return null;
+      }),
+      subEl
+    );
+  }
+
+  /* ── Synthesized textbook pattern examples with annotations.
+     Same approach as the course deck PDF: some real historical
+     charts, some clean textbook diagrams. I'm not doing live
+     pattern detection because it's unreliable and dishonest —
+     I'd rather show a clean illustration you can actually learn
+     from than a false "detected!" overlay on live data. */
+  function buildCandles(closes, seed = 1) {
+    // Convert a close-price path into OHLC bars with realistic small wicks
+    const out = [];
+    let rnd = seed;
+    const r = () => { rnd = (rnd * 9301 + 49297) % 233280; return rnd / 233280; };
+    for (let i = 0; i < closes.length; i++) {
+      const close = closes[i];
+      const open = i > 0 ? closes[i - 1] : close;
+      const bodyMid = (open + close) / 2;
+      const bodyHalf = Math.abs(close - open) / 2;
+      const wickBase = Math.max(bodyHalf, Math.abs(close) * 0.006);
+      const high = Math.max(open, close) + wickBase * (0.4 + r() * 0.8);
+      const low  = Math.min(open, close) - wickBase * (0.4 + r() * 0.8);
+      out.push({ t: i * 86400000, open, high, low, close });
+    }
+    return out;
+  }
+  const SYNTHETIC_PATTERNS = {
+    hs: () => {
+      // Head & Shoulders: uptrend -> LS peak -> pullback -> Head peak ->
+      // pullback to neckline -> RS peak -> break below neckline -> drop.
+      const closes = [
+        95, 97, 100, 103, 106, 110, 115, 118, 116, 113,        // uptrend to LS
+        109, 108, 111, 115, 119, 123, 126, 128, 125, 121,      // dip to neckline, rise to Head
+        116, 111, 108, 110, 114, 118, 121, 122, 119, 115,      // neckline, rise to RS
+        111, 108, 104, 99, 94, 89                              // break neckline, drop
+      ];
+      const necklinePrice = 108.5;
+      return {
+        candles: buildCandles(closes, 7),
+        annotations: [
+          { type: 'label', candle: 7,  price: 118, label: 'Left Shoulder', color: C.blue, above: true, leader: true },
+          { type: 'label', candle: 17, price: 128, label: 'Head',          color: C.gold, above: true, leader: true },
+          { type: 'label', candle: 27, price: 122, label: 'Right Shoulder',color: C.blue, above: true, leader: true },
+          { type: 'line',  from: { candle: 10, price: necklinePrice }, to: { candle: 30, price: necklinePrice },
+                           color: C.purple, dashed: true, label: 'Neckline' },
+          { type: 'bracket', candle: 34, top: necklinePrice, bot: 89,     color: C.dust, label: 'target' },
+        ],
+        subtitle: 'Illustrative Head & Shoulders — the neckline break confirms the reversal.',
+      };
+    },
+    bullflag: () => {
+      // Bull Flag: sideways -> sharp rise (flagpole) -> small pullback (pennant) -> continuation.
+      const closes = [
+        100, 100, 101, 100, 101,                                // sideways
+        104, 108, 112, 116, 120, 124,                           // flagpole
+        122, 121, 122, 120, 121, 120,                           // pennant (small pullback)
+        124, 128, 132, 135, 138                                 // continuation
+      ];
+      return {
+        candles: buildCandles(closes, 11),
+        annotations: [
+          { type: 'line', from: { candle: 5, price: 102 }, to: { candle: 10, price: 124 },
+                          color: C.green, label: 'flagpole' },
+          { type: 'line', from: { candle: 11, price: 122 }, to: { candle: 16, price: 120 },
+                          color: C.orange, dashed: true },
+          { type: 'line', from: { candle: 11, price: 124 }, to: { candle: 16, price: 122.5 },
+                          color: C.orange, dashed: true, label: 'pennant' },
+          { type: 'label', candle: 20, price: 132, label: 'breakout →', color: C.green, above: true, leader: false },
+        ],
+        subtitle: 'Illustrative Bull Flag — continuation pattern after a sharp move up.',
+      };
+    },
+    bearflag: () => {
+      // Bear Flag: sharp drop (flagpole) -> weak bounce (pennant) -> continuation down.
+      const closes = [
+        140, 138, 138,                                          // topping
+        134, 128, 122, 116, 111, 108,                           // flagpole down
+        110, 112, 111, 113, 112, 114,                           // pennant (weak bounce)
+        109, 104, 99, 94, 90                                    // continuation down
+      ];
+      return {
+        candles: buildCandles(closes, 13),
+        annotations: [
+          { type: 'line', from: { candle: 2, price: 138 }, to: { candle: 8, price: 108 },
+                          color: C.red, label: 'flagpole' },
+          { type: 'line', from: { candle: 9, price: 110 }, to: { candle: 14, price: 114 },
+                          color: C.orange, dashed: true },
+          { type: 'line', from: { candle: 9, price: 108 }, to: { candle: 14, price: 112 },
+                          color: C.orange, dashed: true, label: 'pennant' },
+          { type: 'label', candle: 17, price: 99, label: 'breakdown →', color: C.red, above: false, leader: false },
+        ],
+        subtitle: 'Illustrative Bear Flag — continuation pattern after a sharp move down.',
+      };
+    },
+    cuphandle: () => {
+      // Cup and Handle: rise -> rounded U-shape cup -> small handle -> breakout.
+      const closes = [
+        95, 98, 100,                                            // approach
+        99, 95, 91, 88, 86, 85, 86, 88, 91, 95, 98, 100,        // cup (U shape)
+        99, 97, 96, 97, 98, 99,                                 // handle
+        102, 106, 110                                           // breakout
+      ];
+      return {
+        candles: buildCandles(closes, 17),
+        annotations: [
+          { type: 'line', from: { candle: 2, price: 100 }, to: { candle: 14, price: 100 },
+                          color: C.dust, dashed: true, label: 'rim' },
+          { type: 'label', candle: 8, price: 85, label: 'cup', color: C.blue, above: false, leader: true },
+          { type: 'label', candle: 18, price: 96, label: 'handle', color: C.orange, above: false, leader: true },
+          { type: 'label', candle: 22, price: 106, label: 'breakout →', color: C.green, above: true, leader: false },
+        ],
+        subtitle: 'Illustrative Cup & Handle — bullish continuation after a rounded base.',
+      };
+    },
+    bcb: () => {
+      // BCB Crashing Structure: 7-wave crash.
+      // 1: pop up, 2: distribution, 3: initial drop, 4: bounce, 5: main crash with mini 5-wave inside, 6: bounce, 7: capitulation low.
+      const closes = [
+        100, 108, 115, 118, 120,                                 // wave 1: rally
+        118, 122, 119, 121, 118, 116,                            // wave 2: distribution
+        112, 106, 100, 96,                                       // wave 3: initial drop
+        99, 103, 106,                                            // wave 4: bounce
+        102, 96, 93, 89, 85, 82,                                 // wave 5: main crash (contains sub-waves)
+        86, 90, 92,                                              // wave 6: dead-cat bounce
+        87, 82, 76, 72                                           // wave 7: capitulation low
+      ];
+      return {
+        candles: buildCandles(closes, 23),
+        annotations: [
+          { type: 'label', candle: 4,  price: 120, label: '1', color: C.gold, above: true },
+          { type: 'label', candle: 8,  price: 122, label: '2', color: C.gold, above: true },
+          { type: 'label', candle: 14, price: 96,  label: '3', color: C.gold, above: false },
+          { type: 'label', candle: 17, price: 106, label: '4', color: C.gold, above: true },
+          { type: 'label', candle: 23, price: 82,  label: '5', color: C.red,  above: false },
+          { type: 'label', candle: 26, price: 92,  label: '6', color: C.gold, above: true },
+          { type: 'label', candle: 30, price: 72,  label: '7', color: C.red,  above: false },
+        ],
+        subtitle: 'Illustrative BCB Crashing Structure — 7-wave crash. Wave 7 sets the final low.',
+      };
+    },
+    wyckoffA: () => {
+      // Wyckoff Accumulation: PS -> SC -> AR -> ST -> ... Spring -> SOS -> LPS -> BU
+      const closes = [
+        120, 115, 110, 105, 100, 96,                            // downtrend
+        94, 92, 89, 87,                                          // PS then SC
+        95, 100, 102,                                            // AR
+        99, 96, 94, 96, 98, 100, 99, 97, 96, 98,                 // Phase B
+        94, 90, 88, 92,                                          // Spring
+        98, 105, 112,                                            // SOS
+        108, 106, 108,                                            // LPS
+        113, 118, 124                                             // BU / markup
+      ];
+      return {
+        candles: buildCandles(closes, 29),
+        annotations: [
+          { type: 'label', candle: 6,  price: 94, label: 'PS',   color: C.blue,   above: false },
+          { type: 'label', candle: 9,  price: 87, label: 'SC',   color: C.red,    above: false },
+          { type: 'label', candle: 12, price: 102, label: 'AR',  color: C.green,  above: true },
+          { type: 'label', candle: 15, price: 94, label: 'ST',   color: C.blue,   above: false },
+          { type: 'label', candle: 26, price: 88, label: 'Spring', color: C.gold, above: false, leader: true },
+          { type: 'label', candle: 30, price: 112, label: 'SOS', color: C.green,  above: true },
+          { type: 'label', candle: 33, price: 106, label: 'LPS', color: C.blue,   above: false },
+          { type: 'label', candle: 36, price: 124, label: 'BU',  color: C.purple, above: true },
+        ],
+        subtitle: 'Illustrative Wyckoff Accumulation — smart money accumulates through Phase B before markup.',
+      };
+    },
+    wyckoffD: () => {
+      // Wyckoff Distribution: PSY -> BC -> AR -> ST -> UT (in phase B) -> LPSY -> SOW -> markdown
+      const closes = [
+        80, 85, 90, 95, 100, 104,                                // uptrend
+        106, 108, 110,                                            // PSY then BC
+        100, 96, 94,                                              // AR
+        97, 101, 104, 102, 105, 108, 105, 102, 104, 101,          // Phase B, UT
+        109, 106, 103,                                            // LPSY
+        99, 94, 90, 94,                                            // SOW rally
+        92, 87, 82, 76, 70                                         // markdown
+      ];
+      return {
+        candles: buildCandles(closes, 31),
+        annotations: [
+          { type: 'label', candle: 6,  price: 106, label: 'PSY',   color: C.blue, above: true },
+          { type: 'label', candle: 8,  price: 110, label: 'BC',    color: C.red, above: true },
+          { type: 'label', candle: 11, price: 94, label: 'AR',     color: C.dust, above: false },
+          { type: 'label', candle: 14, price: 104, label: 'ST',    color: C.blue, above: true },
+          { type: 'label', candle: 17, price: 108, label: 'UT',    color: C.gold, above: true, leader: true },
+          { type: 'label', candle: 22, price: 109, label: 'LPSY',  color: C.orange, above: true },
+          { type: 'label', candle: 25, price: 94, label: 'SOW',    color: C.red, above: false },
+          { type: 'label', candle: 34, price: 70, label: 'markdown', color: C.red, above: false },
+        ],
+        subtitle: 'Illustrative Wyckoff Distribution — smart money offloads through Phase B before markdown.',
+      };
+    },
+    elliott: () => {
+      // Elliott Wave: 5 impulse waves (1-2-3-4-5) then ABC correction
+      const closes = [
+        100,                                                     // start
+        108, 112, 116,                                           // wave 1 up
+        114, 111, 109,                                           // wave 2 down (partial)
+        114, 120, 128, 135, 140,                                 // wave 3 up (longest)
+        135, 130, 128,                                           // wave 4 down
+        132, 138, 144, 150,                                      // wave 5 up (final impulse)
+        144, 138, 133,                                           // wave A down
+        137, 141,                                                // wave B up
+        135, 128, 121, 115                                       // wave C down
+      ];
+      return {
+        candles: buildCandles(closes, 37),
+        annotations: [
+          { type: 'label', candle: 3,  price: 116, label: '1', color: C.blue,   above: true },
+          { type: 'label', candle: 6,  price: 109, label: '2', color: C.orange, above: false },
+          { type: 'label', candle: 11, price: 140, label: '3', color: C.blue,   above: true },
+          { type: 'label', candle: 14, price: 128, label: '4', color: C.orange, above: false },
+          { type: 'label', candle: 18, price: 150, label: '5', color: C.blue,   above: true },
+          { type: 'label', candle: 21, price: 133, label: 'A', color: C.red,    above: false },
+          { type: 'label', candle: 23, price: 141, label: 'B', color: C.gold,   above: true },
+          { type: 'label', candle: 27, price: 115, label: 'C', color: C.red,    above: false },
+        ],
+        subtitle: 'Illustrative Elliott Wave — 5-wave impulse followed by A-B-C correction.',
+      };
+    },
+  };
+
+  /* ── PATTERNS TAB — real candles, real math where the concept
+     is well-defined (indicators, Fibonacci from a real swing).
+     For subjective structural patterns (H&S, flags, Wyckoff,
+     Elliott), it shows the real chart plus the description from
+     your course deck — spotting them is the skill you practice. */
+  const PATTERN_CONCEPTS = [
+    { id: 'candles', label: 'Candlesticks', kind: 'basic',
+      desc: 'Green candles = close above open (buyers won). Red = close below open (sellers won). Wicks show intraperiod extremes. Long lower wick = rejection of lower prices; long upper wick = rejection of higher prices.' },
+    { id: 'fib_retr', label: 'Fib Retracements', kind: 'fib' },
+    { id: 'fib_ext', label: 'Fib Extensions', kind: 'fibext' },
+    { id: 'ma', label: 'Moving Averages', kind: 'ma' },
+    { id: 'macd', label: 'MACD', kind: 'macd' },
+    { id: 'rsi', label: 'RSI', kind: 'rsi' },
+    { id: 'stochrsi', label: 'Stoch RSI', kind: 'stochrsi' },
+    { id: 'hs', label: 'Head & Shoulders', kind: 'reference',
+      desc: 'Three peaks, middle one tallest (head), outer two similar height (shoulders). The neckline connects the two troughs. A break below the neckline on volume confirms a reversal from bullish to bearish. Inverted H&S = bearish-to-bullish reversal.' },
+    { id: 'bullflag', label: 'Bull Flag', kind: 'reference',
+      desc: 'Sharp move up (flagpole) on high volume, then a low-volume pullback (pennant) that does NOT retrace the whole move. Entry on breakout above the pennant. Target = flagpole height projected up from the breakout.' },
+    { id: 'bearflag', label: 'Bear Flag', kind: 'reference',
+      desc: 'Mirror of Bull Flag: sharp drop (flagpole), then a weak low-volume bounce (pennant) that does not recover the whole move. Entry on breakdown below the pennant.' },
+    { id: 'cuphandle', label: 'Cup & Handle', kind: 'reference',
+      desc: 'Rounded U-shape (cup), then a smaller downward-drifting consolidation (handle) shallower than the cup. Breakout above the handle rim confirms; target = cup depth added to the breakout price.' },
+    { id: 'bcb', label: 'BCB Crashing Structure', kind: 'reference',
+      desc: 'Seven-wave crash sequence. Wave 5 (the main crash) contains its own five-wave subdivision. Wave 6 is a dead-cat bounce that rallies into the Wave 4 area. Wave 7 sets the final capitulation low — often the best long entry of the sequence.' },
+    { id: 'wyckoffA', label: 'Wyckoff Accumulation', kind: 'reference',
+      desc: 'PS → SC (selling climax) → AR → ST → optional Spring (shakeout below support) → SOS (sign of strength) → LPS → BU. Smart money accumulates quietly through Phase B before the markup in Phase E.' },
+    { id: 'wyckoffD', label: 'Wyckoff Distribution', kind: 'reference',
+      desc: 'PSY → BC (buying climax) → AR → ST → optional UTAD (upthrust trap above resistance) → SOW (sign of weakness) → LPSY. Mirror of accumulation but at a top, ending in markdown.' },
+    { id: 'elliott', label: 'Elliott Wave', kind: 'reference',
+      desc: 'Five-wave impulse (1-2-3-4-5) in the trend direction, followed by a three-wave correction (A-B-C). Rules: (1) Wave 2 never retraces more than 100% of Wave 1. (2) Wave 3 is never the shortest impulse wave. (3) Wave 4 does not enter Wave 1\'s territory (except in diagonals).' },
+  ];
+  function PatternsTab({ assets }) {
+    const [symbol, setSymbol] = useState('BTC');
+    const [concept, setConcept] = useState(PATTERN_CONCEPTS[0]);
+    const [days, setDays] = useState(90);
+    const [candles, setCandles] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState('');
+
+    // Structural patterns use hand-crafted textbook examples with annotations;
+    // basic concepts (candles, indicators, Fibonacci) use real live data.
+    const useSynthetic = concept.kind === 'reference' && SYNTHETIC_PATTERNS[concept.id];
+
+    useEffect(() => {
+      if (useSynthetic) {
+        // No fetch needed — the synthesized example is deterministic.
+        const built = SYNTHETIC_PATTERNS[concept.id]();
+        setCandles(built.candles);
+        setErr('');
+        setLoading(false);
+        return;
+      }
+      const cgId = CG[symbol];
+      if (!cgId) {
+        setErr('No CoinGecko mapping for ' + symbol);
+        setCandles(null);          // clear so we don't show the previous asset's chart
+        setLoading(false);
+        return;
+      }
+      // Clear immediately so a failed fetch below can't leave the previous
+      // asset's candles stuck on screen — this was the "all charts same" bug.
+      setCandles(null);
+      setLoading(true);
+      setErr('');
+      fetch(`/api/chart-ohlc/${cgId}?days=${days}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.error || !d.candles || d.candles.length < 10) {
+            setErr(d.error || 'Not enough real data for this range.');
+            setCandles(null);
+            setLoading(false);
+            return;
+          }
+          setCandles(d.candles);
+          setLoading(false);
+        })
+        .catch(() => {
+          setErr('Backend unreachable.');
+          setCandles(null);
+          setLoading(false);
+        });
+    }, [symbol, days, concept.id, useSynthetic]);
+
+    const closes = candles ? candles.map(c => c.close) : [];
+    let overlays = [], subpanel = null, annotations = null, subtitle = null;
+    if (useSynthetic) {
+      const built = SYNTHETIC_PATTERNS[concept.id]();
+      annotations = built.annotations;
+      subtitle = built.subtitle;
+    } else if (candles && candles.length > 0) {
+      const highs = candles.map(c => c.high), lows = candles.map(c => c.low);
+      if (concept.kind === 'ma') {
+        overlays = [
+          { values: sma(closes, 20), color: C.blue },
+          { values: sma(closes, 50), color: C.orange },
+          { values: sma(closes, Math.min(200, Math.floor(closes.length / 2))), color: C.purple },
+        ];
+      } else if (concept.kind === 'fib' || concept.kind === 'fibext') {
+        const { hi, lo } = findSwing(highs, lows);
+        const rangeSpan = hi - lo;
+        const levels = concept.kind === 'fib'
+          ? [[0, '0.0'], [0.236, '0.236'], [0.382, '0.382'], [0.5, '0.5'], [0.618, '0.618'], [0.702, '0.702 OTE'], [0.786, '0.786'], [1, '1.0']]
+          : [[1, '1.0'], [1.236, '1.236'], [1.382, '1.382'], [1.618, '1.618'], [2.618, '2.618']];
+        overlays = levels.map(([r, label]) => ({
+          hline: hi - rangeSpan * r,
+          color: r === 0.702 ? C.gold : C.dust,
+          label,
+          emphasize: r === 0.702
+        }));
+      } else if (concept.kind === 'rsi') {
+        subpanel = { values: rsiCalc(closes), label: 'RSI (14)', fixedRange: [0, 100], bands: [30, 70] };
+      } else if (concept.kind === 'macd') {
+        subpanel = { type: 'hist', values: macdCalc(closes).hist, label: 'MACD Histogram (12,26,9)' };
+      } else if (concept.kind === 'stochrsi') {
+        const s = stochRsiCalc(closes);
+        subpanel = {
+          values: s.k, label: 'Stoch RSI (14,14,3,3)',
+          fixedRange: [0, 100], bands: [20, 80],
+          lines: [{ values: s.k, color: C.blue }, { values: s.d, color: C.purple }]
+        };
+      }
+    }
+
+    return React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 14 } },
+      React.createElement("div", { style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } },
+        !useSynthetic && React.createElement("select", {
+          value: symbol, onChange: e => setSymbol(e.target.value),
+          style: { background: C.sf2, border: `1px solid ${C.seam}`, color: C.ink, borderRadius: 6, padding: '6px 10px', fontSize: 12, fontFamily: 'monospace' }
+        }, assets.filter(a => CG[a.s]).map(a => React.createElement("option", { key: a.s, value: a.s }, a.s))),
+        !useSynthetic && React.createElement("select", {
+          value: days, onChange: e => setDays(parseInt(e.target.value)),
+          style: { background: C.sf2, border: `1px solid ${C.seam}`, color: C.ink, borderRadius: 6, padding: '6px 10px', fontSize: 12 }
+        }, [30, 90, 180, 365].map(d => React.createElement("option", { key: d, value: d }, `${d}d`))),
+        useSynthetic && React.createElement("span", {
+          style: { padding: '4px 10px', background: `${C.gold}22`, border: `1px solid ${C.gold}`, borderRadius: 6, color: C.gold, fontSize: 10, fontWeight: 700, fontFamily: 'monospace', letterSpacing: '.05em' }
+        }, "ILLUSTRATIVE TEXTBOOK EXAMPLE")
+      ),
+      React.createElement("div", { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+        PATTERN_CONCEPTS.map(c => React.createElement("button", {
+          key: c.id, onClick: () => setConcept(c),
+          style: {
+            padding: '5px 12px', borderRadius: 20,
+            border: `1px solid ${concept.id === c.id ? C.blue : C.seam}`,
+            background: concept.id === c.id ? `${C.blue}22` : 'transparent',
+            color: concept.id === c.id ? C.blue : C.dust,
+            fontSize: 11, fontWeight: concept.id === c.id ? 700 : 400, cursor: 'pointer'
+          }
+        }, c.label))
+      ),
+      React.createElement("div", { style: { fontSize: 10, color: C.dust } },
+        useSynthetic
+          ? "Hand-crafted textbook example. Real charts rarely look this clean — the point is to learn the shape so you can spot it live."
+          : `Real ${symbol}/USD candles from CoinGecko — server-cached 5 min. Not illustrated.`),
+      err && !useSynthetic && React.createElement("div", { style: { color: C.red, fontSize: 12 } }, err),
+      loading
+        ? React.createElement("div", { style: { padding: 40, textAlign: 'center', color: C.dust } },
+            React.createElement(Spin, null), " Loading real candles...")
+        : candles && React.createElement(CandlestickChart, {
+            candles, overlays, annotations, subpanel, height: subpanel ? 380 : 360
+          }),
+      subtitle && React.createElement("div", {
+        style: { background: `${C.gold}11`, border: `1px solid ${C.gold}33`, borderRadius: 8, padding: 12, fontSize: 12, color: C.ink, lineHeight: 1.6 }
+      }, subtitle),
+      concept.desc && React.createElement("div", {
+        style: { background: `${C.blue}11`, border: `1px solid ${C.blue}33`, borderRadius: 8, padding: 14, fontSize: 12, color: C.ink, lineHeight: 1.7 }
+      },
+        React.createElement("div", { style: { color: C.blue, fontWeight: 700, marginBottom: 6 } }, "What to look for"),
+        concept.desc
+      )
+    );
+  }
+
+  /* ── SIGNALS TAB — real backend signals + your real risk config ── */
+  function SignalsTab() {
+    const [signals, setSignals] = useState([]);
+    const [config, setConfig] = useState(null);
+    const [err, setErr] = useState('');
+    useEffect(() => {
+      const load = () => Promise.all([apiFetch('/api/signals?limit=20'), apiFetch('/api/config')])
+        .then(([sig, cfg]) => { setSignals(sig); setConfig(cfg); setErr(''); })
+        .catch(() => setErr('Could not reach the NEXUS backend.'));
+      load();
+      const id = setInterval(load, 20000);
+      return () => clearInterval(id);
+    }, []);
+    if (err) return React.createElement("div", { style: { color: C.red, padding: 20, textAlign: 'center' } }, err);
+    if (!config) return React.createElement("div", { style: { padding: 20, textAlign: 'center', color: C.dust } },
+      React.createElement(Spin, null), " Loading signals...");
+    return React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+      React.createElement("div", { style: { fontSize: 11, color: C.dust } },
+        `Threshold ≥ ${config.signal_threshold} enters a position · SL ${config.sl_pct.toFixed(1)}% / TP ${config.tp_pct.toFixed(1)}% (your real risk config)`),
+      signals.length === 0
+        ? React.createElement("div", { style: { color: C.dust, textAlign: 'center', padding: 30 } }, "No signals fired yet.")
+        : signals.map((s, i) => React.createElement("div", {
+            key: s.id || i, style: { background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8, padding: 14 }
+          },
+            React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
+              React.createElement("div", { style: { display: 'flex', gap: 10, alignItems: 'center' } },
+                React.createElement("span", { style: { fontFamily: 'monospace', fontSize: 15, fontWeight: 700, color: C.ink } }, s.symbol),
+                React.createElement(Badge, { label: s.pattern || 'signal', color: C.blue }),
+                React.createElement(Badge, { label: s.entered ? 'Entered' : 'Skipped', color: s.entered ? C.green : C.dust })
+              ),
+              React.createElement("span", { style: { fontFamily: 'monospace', fontSize: 22, fontWeight: 700, color: sc(s.score) } }, s.score)
+            ),
+            React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 } },
+              [['PRICE AT SIGNAL', fp(s.price), C.blue],
+               ['STOP (auto)', fp(s.price * (1 - config.sl_pct / 100)), C.red],
+               ['TARGET (auto)', fp(s.price * (1 + config.tp_pct / 100)), C.green]]
+                .map(([l, v, c]) => React.createElement("div", {
+                  key: l, style: { background: C.sf2, borderRadius: 6, padding: '8px 10px' }
+                },
+                  React.createElement("div", { style: { fontSize: 9, color: C.dust, marginBottom: 4 } }, l),
+                  React.createElement("div", { style: { fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: c } }, v)))
+            ),
+            React.createElement("div", { style: { marginTop: 8, fontSize: 10, color: C.dust } },
+              s.timestamp ? new Date(s.timestamp).toLocaleString() : '')
+          ))
+    );
+  }
+
+  /* ── MACRO TAB — real FRED data (only if you add a free key) ─── */
+  function MacroTab({ fg }) {
+    const [fredKey, setFredKey] = useState(() => ls.g('fredkey', ''));
+    const [showFred, setShowFred] = useState(() => !ls.g('fredkey', ''));
+    const [fredData, setFredData] = useState(null);
+    const [fredLoading, setFredLoading] = useState(false);
+    const fetchFred = async key => {
+      if (!key) return;
+      setFredLoading(true);
+      try {
+        const ids = ['FEDFUNDS', 'DGS10', 'CPIAUCSL', 'UNRATE'];
+        const results = await Promise.all(ids.map(id =>
+          fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${key}&file_type=json&sort_order=desc&limit=1`)
+            .then(r => r.json())));
+        const d = {};
+        ids.forEach((id, i) => {
+          const obs = results[i]?.observations;
+          if (obs && obs[0]) d[id] = parseFloat(obs[0].value);
+        });
+        setFredData(d);
+        ls.s('fredkey', key);
+      } catch { setFredData(null); }
+      setFredLoading(false);
+    };
+    useEffect(() => { if (fredKey) fetchFred(fredKey); }, []);
+    return React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 14 } },
+      React.createElement("div", {
+        style: { background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8, padding: 14, textAlign: 'center' }
+      },
+        React.createElement("div", { style: { fontSize: 11, color: C.dust, marginBottom: 6 } }, "SMART DCA MULTIPLIER (from live Fear & Greed)"),
+        React.createElement("div", {
+          style: { fontFamily: 'monospace', fontSize: 36, fontWeight: 700,
+                   color: fg <= 25 ? C.red : fg <= 45 ? C.orange : fg <= 65 ? C.dust : C.green }
+        }, "×", fg <= 25 ? '3.0' : fg <= 45 ? '2.0' : fg <= 65 ? '1.0' : fg <= 85 ? '0.7' : '0.3'),
+        React.createElement("div", { style: { fontSize: 11, color: C.dust } }, `F&G ${fg} (live from alternative.me)`)
+      ),
+      React.createElement("div", {
+        style: { background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8, padding: 14 }
+      },
+        React.createElement("div", {
+          style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }
+        },
+          React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.ink } }, "Federal Reserve Economic Data"),
+            React.createElement("div", { style: { fontSize: 11, color: C.dust, marginTop: 2 } },
+              fredData ? 'Live from FRED' : 'Free key needed — nothing shown until then')
+          ),
+          fredData
+            ? React.createElement(Badge, { label: "● LIVE FRED", color: C.green })
+            : React.createElement("button", {
+                onClick: () => setShowFred(s => !s),
+                style: { padding: '5px 12px', background: `${C.blue}22`, border: `1px solid ${C.blue}`, borderRadius: 6, color: C.blue, fontSize: 11, fontWeight: 700, cursor: 'pointer' }
+              }, "+ Add free FRED key")
+        ),
+        showFred && React.createElement("div", { style: { marginBottom: 12 } },
+          React.createElement("div", { style: { fontSize: 11, color: C.dust, marginBottom: 6 } },
+            "Free key: fred.stlouisfed.org/docs/api/api_key.html — takes 60 seconds"),
+          React.createElement("div", { style: { display: 'flex', gap: 8 } },
+            React.createElement("input", {
+              value: fredKey, onChange: e => setFredKey(e.target.value), placeholder: "Your FRED API key...",
+              style: { flex: 1, padding: '7px 10px', background: C.sf2, border: `1px solid ${C.seam}`, borderRadius: 6, color: C.ink, fontSize: 12 }
+            }),
+            React.createElement("button", {
+              onClick: () => { setShowFred(false); fetchFred(fredKey); },
+              style: { padding: '7px 14px', background: `${C.blue}22`, border: `1px solid ${C.blue}`, borderRadius: 6, color: C.blue, fontSize: 12, fontWeight: 700, cursor: 'pointer' }
+            }, fredLoading ? 'Loading...' : 'Fetch Live')
+          )
+        ),
+        !fredData && !showFred && React.createElement("div", {
+          style: { fontSize: 12, color: C.dust, textAlign: 'center', padding: '20px 0' }
+        }, "No key added — showing nothing rather than made-up numbers."),
+        fredData && React.createElement("div", {
+          style: { display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }
+        },
+          [['FEDFUNDS', 'Fed Funds Rate', '%'],
+           ['DGS10', '10Y Treasury Yield', '%'],
+           ['CPIAUCSL', 'CPI (index)', ''],
+           ['UNRATE', 'Unemployment', '%']]
+            .map(([id, label, unit]) => React.createElement("div", {
+              key: id, style: { background: C.sf2, borderRadius: 6, padding: '10px 8px', textAlign: 'center' }
+            },
+              React.createElement("div", { style: { fontSize: 9, color: C.dust, marginBottom: 4 } }, label),
+              React.createElement("div", {
+                style: { fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: C.blue }
+              }, fredData[id] != null ? `${fredData[id].toFixed(2)}${unit}` : '—')
+            ))
+        )
+      )
+    );
+  }
+
+  /* ── ALPHA EDGE TAB — genuinely free real sources only:
+     Bybit funding rates (public, no key) + momentum sync
+     computed from your already-fetched live prices. ──────── */
+  function AlphaTab({ assets }) {
+    const [fundRates, setFundRates] = useState([]);
+    const [fetchingRates, setFetchingRates] = useState(false);
+    const [rateErr, setRateErr] = useState('Click "Fetch Bybit" for live funding rates.');
+    const fetchFundingRates = async () => {
+      setFetchingRates(true);
+      setRateErr('');
+      try {
+        const pairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'AVAXUSDT', 'ARBUSDT', 'LINKUSDT', 'DOTUSDT'];
+        const results = await Promise.all(pairs.map(p =>
+          fetch(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${p}`).then(r => r.json())));
+        const updated = results.map((d, i) => {
+          const t = d?.result?.list?.[0];
+          if (!t) return null;
+          const r = parseFloat(t.fundingRate) * 100;
+          return { s: pairs[i].replace('USDT', ''), r };
+        }).filter(Boolean);
+        if (!updated.length) setRateErr('Bybit returned no data — try again shortly.');
+        setFundRates(updated);
+      } catch {
+        setRateErr('Bybit fetch failed — may be rate-limited or unreachable.');
+      }
+      setFetchingRates(false);
+    };
+    const frColor = r => r > 0.06 ? C.red : r > 0.02 ? C.orange : r < -0.03 ? C.green : r < 0 ? C.teal : C.dust;
+
+    const tracked = assets.filter(a => ['BTC', 'ETH', 'SOL'].includes(a.s));
+    const momentum = tracked.map(a => ({ ...a, above: a.ch > 0 && a.ch1 > 0 }));
+    const allAbove = momentum.length === 3 && momentum.every(a => a.above);
+
+    return React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 14 } },
+      React.createElement("div", {
+        style: { background: C.sf, border: `1px solid ${allAbove ? C.green : C.seam}`, borderRadius: 8, padding: 14 }
+      },
+        React.createElement(ST, { ch: "Cross-Asset Momentum Sync (real, from live prices)" }),
+        React.createElement("div", { style: { fontSize: 11, color: C.dust, marginBottom: 10 } },
+          "When BTC + ETH + SOL are all up on both 1h and 24h simultaneously, momentum is aligned across majors."),
+        momentum.map(a => React.createElement("div", {
+          key: a.s, style: { display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${C.seam}20`, fontSize: 12 }
+        },
+          React.createElement("span", { style: { fontFamily: 'monospace', fontWeight: 700, color: C.ink } }, a.s),
+          React.createElement("span", { style: { color: a.above ? C.green : C.red, fontFamily: 'monospace' } },
+            a.above ? '↑ aligned' : '↓ not aligned')
+        )),
+        React.createElement("div", {
+          style: { marginTop: 10, padding: '8px 10px', background: allAbove ? `${C.green}11` : `${C.seam}33`,
+                   borderRadius: 6, fontSize: 11, fontWeight: 700, color: allAbove ? C.green : C.dust, textAlign: 'center' }
+        }, allAbove ? '🔥 Full sync right now' : 'Not fully aligned right now')
+      ),
+      React.createElement("div", {
+        style: { background: C.sf, border: `1px solid ${C.seam}`, borderRadius: 8, padding: 14 }
+      },
+        React.createElement("div", {
+          style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }
+        },
+          React.createElement("div", null,
+            React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.dust, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 4 } },
+              "Funding Rate Heatmap"),
+            React.createElement("div", { style: { fontSize: 11, color: C.dust } },
+              "Real, Bybit public API. Positive = longs paying = crowded. Negative = shorts paying = squeeze fuel.")
+          ),
+          React.createElement("button", {
+            onClick: fetchFundingRates, disabled: fetchingRates,
+            style: { padding: '6px 14px', background: `${C.blue}22`, border: `1px solid ${C.blue}`, borderRadius: 6, color: C.blue, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }
+          }, fetchingRates && React.createElement(Spin, null), fetchingRates ? 'Fetching...' : '↻ Fetch Bybit')
+        ),
+        rateErr && React.createElement("div", { style: { fontSize: 11, color: C.dust, marginBottom: 8 } }, rateErr),
+        fundRates.length > 0 && React.createElement("div", {
+          style: { display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }
+        },
+          fundRates.map(f => React.createElement("div", {
+            key: f.s, style: { background: C.sf2, border: `1px solid ${frColor(f.r)}44`, borderRadius: 6, padding: '10px 8px', textAlign: 'center' }
+          },
+            React.createElement("div", { style: { fontFamily: 'monospace', fontWeight: 700, color: C.ink, fontSize: 13 } }, f.s),
+            React.createElement("div", { style: { fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: frColor(f.r) } },
+              `${f.r >= 0 ? '+' : ''}${f.r.toFixed(3)}%`)
+          ))
+        )
+      )
+    );
+  }
+
+  /* ── APP ─────────────────────────────────────────────────── */
+  const TABS = [{
+    id: 'market',
+    icon: '📊',
+    label: 'Market Dashboard'
+  }, {
+    id: 'paper',
+    icon: '🧪',
+    label: 'Paper Trading'
+  }, {
+    id: 'patterns',
+    icon: '📈',
+    label: 'Patterns'
+  }, {
+    id: 'signals',
+    icon: '⚡',
+    label: 'Signals'
+  }, {
+    id: 'gems',
+    icon: '💎',
+    label: 'Gem Finder'
+  }, {
+    id: 'alpha',
+    icon: '🎯',
+    label: 'Alpha Edge'
+  }, {
+    id: 'macro',
+    icon: '🌐',
+    label: 'Macro'
+  }, {
+    id: 'ai',
+    icon: '🤖',
+    label: 'AI Analysis'
+  }, {
+    id: 'trending',
+    icon: '🔥',
+    label: 'Trending'
+  }];
+  function App() {
+    const [tab, setTab] = useState('market');
+    const [assets, setAssets] = useState(SEED);
+    const [trending, setTrending] = useState(TRENDING_SEED);
+    const [trendingLoaded, setTrendingLoaded] = useState(false);
+    const [toasts, setToasts] = useState([]);
+    const [confettiOn, setConfettiOn] = useState(false);
+    const addToast = useCallback((message, type = 'buy') => {
+      const id = Date.now();
+      setToasts(t => [...t, {
+        id,
+        message,
+        type
+      }]);
+      if (type === 'tp') {
+        setConfettiOn(true);
+        SFX.tp();
+        setTimeout(() => setConfettiOn(false), 2200);
+      } else if (type === 'sl') {
+        SFX.sl();
+      } else if (type === 'buy') {
+        SFX.buy();
+      } else if (type === 'alert') {
+        SFX.alert();
+      }
+      setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 4500);
+    }, []);
+    const [fg, setFg] = useState(50);
+    const [loading, setLoading] = useState(false);
+    const [liveTime, setLiveTime] = useState('');
+    useEffect(() => {
+      const tick = () => setLiveTime(new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }));
+      tick();
+      const id = setInterval(tick, 1000);
+      return () => clearInterval(id);
+    }, []);
+    useEffect(() => {
+      const fetch_data = async () => {
+        setLoading(true);
+        try {
+          const ids = SEED.filter(a => CG[a.s]).map(a => CG[a.s]).join(',');
+          const [priceRes, fgRes] = await Promise.all([fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_1h_change=true`).then(r => r.json()), fetch('https://api.alternative.me/fng/?limit=1').then(r => r.json())]);
+          setAssets(prev => prev.map(a => {
+            const id = CG[a.s];
+            if (id && priceRes[id]) return {
+              ...a,
+              p: priceRes[id].usd || a.p,
+              ch: priceRes[id].usd_24h_change || a.ch,
+              ch1: priceRes[id].usd_1h_change || a.ch1
+            };
+            return a;
+          }));
+          if (fgRes.data?.[0]?.value) setFg(parseInt(fgRes.data[0].value));
+        } catch {}
+        setLoading(false);
+      };
+      fetch_data();
+      const id = setInterval(fetch_data, 60000);
+      return () => clearInterval(id);
+    }, []);
+    useEffect(() => {
+      // Real trending coins via server-side proxy — replaces the hardcoded
+      // TRENDING_SEED that was still shipping in v5 by mistake.
+      const fetchTrending = async () => {
+        try {
+          const r = await fetch('/api/trending');
+          const d = await r.json();
+          if (d && !d.error && Array.isArray(d.coins) && d.coins.length > 0) {
+            setTrending(d.coins);
+            setTrendingLoaded(true);
+          }
+        } catch (e) { /* keep seed as fallback */ }
+      };
+      fetchTrending();
+      const id = setInterval(fetchTrending, 300000); // every 5 min
+      return () => clearInterval(id);
+    }, []);
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.bg,
+        minHeight: '100vh',
+        color: C.ink
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '10px 18px',
+        background: C.sf,
+        borderBottom: `1px solid ${C.seam}`,
+        position: 'sticky',
+        top: 0,
+        zIndex: 200
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: 'monospace',
+        fontWeight: 900,
+        fontSize: 16,
+        letterSpacing: '.1em',
+        background: `linear-gradient(135deg,${C.blue},${C.purple})`,
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent'
+      }
+    }, "NEXUS"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        color: C.dust,
+        letterSpacing: '.08em',
+        marginTop: -1
+      }
+    }, "NEURAL EXCHANGE UNIFIED SYSTEM")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 10,
+        alignItems: 'center'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: C.dust
+      }
+    }, "Updated ", liveTime), /*#__PURE__*/React.createElement("span", {
+      style: {
+        padding: '3px 10px',
+        borderRadius: 12,
+        background: `${C.green}22`,
+        color: C.green,
+        fontSize: 11,
+        fontWeight: 700,
+        fontFamily: 'monospace'
+      }
+    }, "● Live"))), /*#__PURE__*/React.createElement(Ticker, {
+      assets: assets
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 1,
+        padding: '0 12px',
+        background: C.sf,
+        borderBottom: `1px solid ${C.seam}`,
+        overflowX: 'auto',
+        scrollbarWidth: 'none'
+      }
+    }, TABS.map(t => /*#__PURE__*/React.createElement("button", {
+      key: t.id,
+      onClick: () => setTab(t.id),
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '10px 14px',
+        borderBottom: `2px solid ${tab === t.id ? C.blue : 'transparent'}`,
+        background: 'transparent',
+        color: tab === t.id ? C.blue : C.dust,
+        fontSize: 12,
+        fontWeight: tab === t.id ? 700 : 400,
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        border: 'none',
+        borderBottom: `2px solid ${tab === t.id ? C.blue : 'transparent'}`
+      }
+    }, /*#__PURE__*/React.createElement("span", null, t.icon), /*#__PURE__*/React.createElement("span", null, t.label)))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: 16,
+        maxWidth: 1200,
+        margin: '0 auto',
+        paddingBottom: 40
+      },
+      className: "fade"
+    }, tab === 'market' && /*#__PURE__*/React.createElement(MarketTab, {
+      assets: assets,
+      trending: trending,
+      loading: loading,
+      fg: fg
+    }), tab === 'paper' && /*#__PURE__*/React.createElement(PaperTab, {
+      notify: addToast
+    }), tab === 'patterns' && /*#__PURE__*/React.createElement(PatternsTab, {
+      assets: assets
+    }), tab === 'signals' && /*#__PURE__*/React.createElement(SignalsTab, null), tab === 'alpha' && /*#__PURE__*/React.createElement(AlphaTab, {
+      assets: assets
+    }), tab === 'macro' && /*#__PURE__*/React.createElement(MacroTab, {
+      fg: fg
+    }), tab === 'gems' && /*#__PURE__*/React.createElement(GemsTab, null), tab === 'ai' && /*#__PURE__*/React.createElement(AITab, {
+      assets: assets,
+      fg: fg
+    }), tab === 'trending' && /*#__PURE__*/React.createElement(TrendingTab, {
+      assets: assets,
+      trending: trending
+    })), /*#__PURE__*/React.createElement(ToastStack, {
+      toasts: toasts
+    }), /*#__PURE__*/React.createElement(Confetti, {
+      active: confettiOn
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: '10px 18px',
+        borderTop: `1px solid ${C.seam}`,
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: 10,
+        color: C.dust
+      }
+    }, /*#__PURE__*/React.createElement("span", null, "NEXUS · Neural Exchange Unified System · ", assets.length, " assets · OTE 0.702 Fibonacci"), /*#__PURE__*/React.createElement("span", null, "Market data: CoinGecko · Paper trading: your NEXUS backend · Sentiment: alternative.me")));
+  }
+  try {
+    ReactDOM.render(React.createElement(App), document.getElementById('root'));
+  } catch (err) {
+    document.getElementById('root').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#07080f;flex-direction:column;gap:16px;padding:24px"><div style=\'font-family:monospace;font-size:36px;font-weight:900;color:#f0476a\'>NEXUS</div><div style=\'color:#5a5f80;font-size:14px;max-width:500px;text-align:center\'">Error loading dashboard. Please hard-refresh with Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows).</div><div style=\'font-family:monospace;font-size:11px;color:#252848;max-width:500px\'">' + err.message + '</div></div>';
+    console.error('NEXUS render error:', err);
+  }
+} catch (fatalErr) {
+  console.error("NEXUS FATAL:", fatalErr);
+  var r = document.getElementById("root");
+  if (r) r.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#07080f;flex-direction:column;gap:14px;padding:32px"><div style=\'font-family:monospace;font-size:32px;color:#f0476a;font-weight:900\'>NEXUS ERROR</div><div style=\'background:#0d0f1e;border:1px solid #f0476a44;border-radius:8px;padding:16px;max-width:640px;width:100%\'><pre style=\'color:#f0476a;font-family:monospace;font-size:10px;word-break:break-all;white-space:pre-wrap;margin:0\'>' + (fatalErr.stack || fatalErr.message) + '</pre></div><div style=\'color:#4f8eff;font-size:12px\'>Open DevTools (Cmd+Option+I) → Console for details. Then send screenshot to Claude.</div></div>';
+}
+
+</script>
+</body>
+</html>
